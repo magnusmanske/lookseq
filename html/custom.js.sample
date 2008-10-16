@@ -1,0 +1,47 @@
+/*
+LookSeq browser interface - custom file demo
+(c) 2008 by Magnus Manske (mm6@sanger.ac.uk)
+Released under GPL
+*/
+
+
+//_________________________________________________________________________________________________
+// Organism-specific functions
+//_________________________________________________________________________________________________
+
+// Creates organism-specific button(s)
+function initialize_organism () {
+	var i = document.getElementById('insert_organism_specific_buttons_here') ;
+	
+	// Organism-specific - edit as needed
+	var span = document.createElement ( 'span' ) ;
+	span.style.marginRight = '6px' ;
+	var button = document.createElement ( 'input' ) ;
+	button.type = 'button' ;
+	button.onclick = show_in_plasmodb ;
+	button.id = 'button_plasmodb' ;
+	button.value = i18n['button_show_in_plasmodb'] ;
+	span.appendChild ( button ) ;
+	i.appendChild ( span ) ;
+}
+
+// Called when a position in the display is clicked
+function single_position_double_click ( pos_x , pos_y ) {
+	var chr = get_selected_chromosome() ;
+	var pos = Math.floor ( Math.floor ( cur_to - cur_from + 1 ) * pos_x / document.getElementById("main_image").width ) + cur_from ;
+
+	// Organism-specific - edit as needed
+	chr = parseInt ( chr.substr ( 3 , 2 ) ) ;
+	var url = 'http://plasmodb.org/plasmo/showQuestion.do?questionFullName=SnpQuestions.SnpsByLocation&submit=Show+Question&go.x=14&go.y=5&go=go&chromosomeOptional=chromosome%20' + chr ;
+	url += '&start_point=' + pos + '&end_point=' + (pos+1) + '&snp_strain_a=Pf-3D7&snp_strain_m=[C]e10de1a47c9461d7963f543845764aad' ;
+	var newWindow = window.open ( url , '_blank') ;
+	newWindow.focus();
+}
+
+
+// Button event handler
+function show_in_plasmodb () {
+	var url = "http://plasmodb.org/cgi-bin/gbrowse/plasmodb/?CombinedSNPs=1&name=" + get_selected_chromosome() + ":" + cur_from + "-" + cur_to ;
+	var newWindow = window.open ( url , '_blank') ;
+	newWindow.focus();
+}

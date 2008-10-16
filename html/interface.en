@@ -1,0 +1,78 @@
+button_show_in_plasmodb	Show in PlasmoDB
+
+update_image_button	Update image
+hide_sanger_bars_button	Hide Sanger bars
+indel_button	Paired reads
+pileup_button	Pileup
+paired_pileup_button	Paired pileup
+coverage_button	Coverage
+button_left	&larr;
+button_right	&rarr;
+button_zoom_in	Zoom in
+button_zoom_out	Zoom out
+button_zoom_1:1	1:1
+button_zoom_2kb	2kb
+button_zoom_50kb	50kb
+button_zoom_full_chromosome	Full chromosome
+button_search	Search
+button_multiple_lanes	Multiple lanes
+
+from	from
+to	to
+text_version_link	Text version
+updating_status	Updating...
+indel_zoom_auto	Auto
+image_width	Image width
+show	Show
+
+opt_ppm	perfect paired matches
+opt_prs	paired reads with SNPs
+opt_sr	single reads
+opt_inv	inversions
+opt_inv_ext	(ext.)
+opt_lp	link pairs
+opt_ks	known SNPs
+opt_ann	annotation
+opt_gc	%GC
+
+legend_title	Legend :
+leg_indel	Paired reads :
+leg_pp	Perfect pairs
+leg_ps	Perfect single
+leg_snps	SNPs
+leg_inv	Inversions
+leg_efr	Expexted fragment range
+leg_cig	CIGAR :
+leg_cmr	Matching read (could contain SNPs)
+leg_del	Deletion
+leg_ins	Insertion
+leg_inv_ext	Inversions :
+leg_inv_ls	Read pair spanning left inversion boundary
+leg_inv_rs	Read pair spanning right inversion boundary
+leg_inv_lb	Pileup left boundary
+leg_inv_rb	Pileup right boundary
+leg_inv_mid	Pileup center
+leg_puv	Pileup view :
+leg_oor	Out-of-range reads (text only)
+leg_cov	Coverage :
+leg_tot	Total
+leg_ks	Known SNPs :
+leg_ipa	in position axis
+leg_ann	Annotation :
+leg_cds	CDS
+leg_repeat	Repeat
+leg_centromer	Centromer
+leg_other	Other
+leg_strand	Strand
+leg_gc_title	GC% :
+leg_gc	%GC
+leg_50	50%
+leg_wr	window range
+helper_displays	Also
+cb_coverage	Coverage
+
+reflink	Use <a id='reflink' href=''>this link</a> as a reference to the current view. Drag the image to view a different part of the chromosome. Double-click the image to center and zoom in.
+daad1	Display is out of date;
+daad2	please update manually
+ok	OK
+cancel	Cancel

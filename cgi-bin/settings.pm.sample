@@ -1,0 +1,48 @@
+#!/usr/local/bin/perl -T
+#########
+# Author:     Magnus Manske (mm6@sanger.ac.uk)
+# Group:      Team 112
+#
+
+package settings ;
+
+require Exporter;
+use warnings ;
+use strict ;
+use AutoLoader qw(AUTOLOAD);
+our @ISA = qw(Exporter);
+our @EXPORT = qw( 
+	$datapath $genome_file $webroot $docroot $htmlpath $use_sanger_layout $tooltitle $cgi_path $annotation_file $snp_file $robots_flag
+);
+
+# Tool title
+our $tooltitle = 'LookSeq' ;
+
+# The local file path to the directory containing the data (alignment databases, reference sequence etc.)
+our $datapath = '../../../../data/teams/team112/solexa' ;
+
+# The local file path to the HTML/JavaScript/i18n files
+our $htmlpath = "/WWW/INTWEB_docs/htdocs/Teams/Team112/lookseq" ;
+
+# The full URL of the directory containing the HTML/JavaScript/i18n files
+our $webroot = "http://intwebdev.sanger.ac.uk/Teams/Team112/lookseq" ;
+
+# The full URL of the directory containing the Perl files (this one, for example)
+our $cgi_path = 'http://intwebdev.sanger.ac.uk/cgi-bin/teams/team112/lookseq' ;
+
+# The file name of the reference sequence in FASTA format. The file must be in the $datapath directory
+our $genome_file = '3D7_pm.fa' ;
+
+# The file name of the sequence annotation database. The file must be in the $datapath directory
+our $annotation_file = 'annotation.sqlite' ;
+
+# The file name of the known SNP database. The file must be in the $datapath directory
+our $snp_file = "snps.sqlite" ;
+
+# Allows/disallows indexing of the page by robots (set to 'noindex' if you don't want the page to show up on Google et al)
+our $robots_flag = 'noindex, nofollow' ;
+
+#
+our $use_sanger_layout = 0 ;
+
+1 ;
