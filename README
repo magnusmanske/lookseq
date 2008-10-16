@@ -1,0 +1,30 @@
+LookseQ is (c) 2008 by Magnus Manske and released under the GPL.
+
+
+
+DATABASE SCHEMA
+
+The schema for read alignment storage consists of two tables for chromosome and meta information, and a set of four tables for each chromosome. The following schema works for sqlite, but should work identical or similar in other databases.
+
+Chromosome and meta tables:
+
+CREATE TABLE chromosomes ( name VARCHAR[256] , size INTEGER );
+CREATE TABLE meta ( key VARCHAR[64] , value VARCHAR[256] );
+
+
+For each chromosome, there are four tables, each beginning with the chromosome name. The names must be identical to those in the chromosomes table.
+For a chromosome called "MAL10", the tables look like this:
+
+CREATE TABLE MAL10_perfect_match ( read_name VARCHAR[32], pos1 INTEGER, pos2 INTEGER );
+CREATE TABLE MAL10_snp_match ( read_name VARCHAR[32], pos1 INTEGER, seq1 VARCHAR[64] , pos2 INTEGER , seq2 VARCHAR[64] );
+CREATE TABLE MAL10_inversions ( read_name VARCHAR[32], pos1 INTEGER, seq1 VARCHAR[64] , pos2 INTEGER , seq2 VARCHAR[64] , dir VARCHAR[4] );
+CREATE TABLE MAL10_single ( read_name VARCHAR[32], pos1 INTEGER, seq1 VARCHAR[64] );
+
+The corresponding indices (technically not required, but they speed things up considerably):
+
+CREATE INDEX MAL10_perfect_index ON MAL10_perfect_match ( pos1 , pos2 );
+CREATE INDEX MAL10_snp_index ON MAL10_snp_match ( pos1 , pos2 );
+CREATE INDEX MAL10_inv_index ON MAL10_inversions ( pos1 , pos2 );
+CREATE INDEX MAL10_sin_index ON MAL10_single ( pos1 );
+
+
