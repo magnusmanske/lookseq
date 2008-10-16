@@ -1,10 +1,44 @@
-LookseQ is (c) 2008 by Magnus Manske and released under the GPL.
+LookSeq is (c) 2008 by Magnus Manske and released under the GPL.
+
+BASIC SETUP
+There are four locations on your system that are important for installing LookSeq:
+* a cgi-bin directory for the Perl scripts; needs to be accessible from the web, and allow Perl execution
+* a html directory for the HTML templates and the JavaScript; needs to be accessible from the web
+* a data directory for the reference sequence and the sqlite databases (unless you use a different database engine)
+* a directory for the LookSeq tools that can convert various formats into alignment databases
+
+
+CGI-BIN
+1. Make a copy of all the files in the cgi-bin directory from SVN into your cgi-bin work directory.
+2. Copy "settings.pm.sample" to "settings.pm" and edit according to your system setup.
+
+
+HTML
+1. Make a copy of all the files in the html directory from SVN into your html work directory.
+2. Adapt "lookseq.html" to your liking if you want; bear in mind that it might be accidentially overwritten with the next update of LookSeq
+3. You can add custom localization strings for new languages or new interface items by creating e.g. "custom.en" (for English); keys in there take priority over "interface.en" keys
+4. You can add new JavaScript functions by creating "custom.js". See "costum.js.sample" for an example.
+   initialize_organism() will be called on script initialization (if the function exists)
+   single_position_double_click(x,y) will be called when a single base (position) is double-clicked in maximum zoom view (if the function exists)
+
+
+TOOLS
+* "cigar2sqlite.pl" can convert a CIGAR alignment to a long-read alignment database.
+  As it does not use the actual read sequence, it will not show SNPs, but only larger InDels (unless SNPs are marked as InDels)
+  There seem to be two CIGAR variants (one with an additional first column); you might have to alter the script for your data accordingly.
+* "make_feature_list_from_embl.pl" can produce an annotation database from a modified EMBL file.
+  Unlikely to be useful directly, but shows how such a database is to be constructed.
+* "make_snp_database.pl" can generate a sqlite database from a list of known SNPs.
+  The input file has the format "chromosome-TAB-position-TAB-reference_base-TAB-alternate_base".
+* "mapview2sqlite.pl" can convert MAQ mapview files into sqlite databases.
 
 
 
-DATABASE SCHEMA
+DATABASE
 
-The schema for read alignment storage consists of two tables for chromosome and meta information, and a set of four tables for each chromosome. The following schema works for sqlite, but should work identical or similar in other databases.
+The schema for read alignment storage consists of two tables for chromosome and meta information, and a set of four tables for each chromosome.
+The following schema works for sqlite, but should work identical or similar in other databases.
+If you decide to use a different DB engine, alter the scripts in cgi-bin accordingly.
 
 Chromosome and meta tables:
 
@@ -27,4 +61,32 @@ CREATE INDEX MAL10_snp_index ON MAL10_snp_match ( pos1 , pos2 );
 CREATE INDEX MAL10_inv_index ON MAL10_inversions ( pos1 , pos2 );
 CREATE INDEX MAL10_sin_index ON MAL10_single ( pos1 );
 
+The seq1 and seq2 fields should contain
+* a blank string if the respective read (part) perfectly matches the reference sequence
+* the read (part) sequence; perfect matches to the reference in lowercase, mismatches in uppercase
 
+
+
+
+Demo output:
+
+sqlite> select * from MAL10_single LIMIT 5;
+L16_917:1:123:273:487|28521|ggtGgtggtgaggaagataaagatgccaaaCatatgt
+L16_917:1:273:920:211|28521|ggtGgtggtgaggaagataaagatgccaaaCatatgt
+L16_917:1:61:34:512|28521|ggtGgtggtgaggaagataaagatgccaaaCatatgt
+L16_917:1:241:540:992|28522|gtGgtggtgaggaagataaagatgccaaaCatatgtt
+L16_917:1:93:28:252|28522|gtGgtggtgaggaagataaagatgccaaaCatatgtt
+
+sqlite> select * from MAL10_perfect_match LIMIT 5;
+L16_917:1:124:466:478|46|2865
+L16_917:1:69:712:545|46|2862
+L16_917:1:65:578:347|48|368
+L16_917:1:241:948:401|77|165
+L16_917:1:185:27:840|80|557
+
+sqlite> select * from MAL10_snp_match LIMIT 5;
+L16_917:1:140:382:285|28195||28538|taaagatgccaaaCatatgtttgataggatagggCaa
+L16_917:1:224:586:508|28337||28532|ggaagataaagatgccaaaCatatgtttgataggata
+L16_917:1:304:692:165|29393|ccccacAtattttgactacgtgccgcagtatcttcgc|29564|tagagcacgaggtaagttgcgttatggtaatagatgT
+L16_917:1:192:361:596|29726||30054|ggcgagtcaggtactcctattAaaatccttaaaagtg
+L16_917:1:208:944:829|30342||30509|taataatgattgtggttgttttGaaaaatgggttAaA
