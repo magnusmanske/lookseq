@@ -33,10 +33,15 @@ our $cgi_path = 'http://intwebdev.sanger.ac.uk/cgi-bin/teams/team112/lookseq' ;
 # The file name of the reference sequence in FASTA format. The file must be in the $datapath directory
 our $genome_file = '3D7_pm.fa' ;
 
-# The file name of the sequence annotation database. The file must be in the $datapath directory
+# Internal index usage cutoff; leave unless you know what you're doing!
+our $use_db_index_cutoff = 25000 ;
+
+# The file name of the sequence annotation database. The file must be in the $datapath directory.
+# Leave undefined if no annotation is given.
 our $annotation_file = 'annotation.sqlite' ;
 
 # The file name of the known SNP database. The file must be in the $datapath directory
+# Leave undefined if no known SNP data is present.
 our $snp_file = "snps.sqlite" ;
 
 # Allows/disallows indexing of the page by robots (set to 'noindex' if you don't want the page to show up on Google et al)
