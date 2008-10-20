@@ -680,14 +680,14 @@ sub dump_image_coverageview {
 
 	unless ( $display_noscale ) {
 		draw_h_axis ( $im , $black ) ;
-		
-		foreach ( 0 .. $height - $scale_height ) {
-			next unless $_ % 50 == 0 ;
-			my $y = $height - $scale_height - $_ ;
-			$im->line ( 0 , $y , 5 , $y , $black ) ;
-			$im->string ( gdSmallFont , 8 , $y-7 , $_ , $black ) ;
-		}
 	}
+	foreach ( 0 .. $height - $scale_height ) {
+		next unless $_ % 50 == 0 ;
+		my $y = $height - $scale_height - $_ ;
+		$im->line ( 0 , $y , 5 , $y , $black ) ;
+		$im->string ( gdSmallFont , 8 , $y-7 , $_ , $black ) ;
+	}
+
 
 	show_debugging_output ( $im , $black ) ;
 
@@ -960,11 +960,11 @@ sub draw_indel_matches {
 				$im->line ( $x1 , $y , $x1 + $len , $y , $color ) ;
 				$im->line ( $x2 , $y , $x2 + $len , $y , $color ) ;
 			} elsif ( $len == 1 ) {
-				unless ( defined $dotcache[$x1]->[$y] ) {
+				unless ( $x1 < 0 or defined $dotcache[$x1]->[$y] ) {
 					$im->setPixel ( $x1 , $y , $color ) ;
 					$dotcache[$x1]->[$y] = 1 ;
 				}
-				unless ( defined $dotcache[$x2]->[$y] ) {
+				unless ( $x2 < 0 or defined $dotcache[$x2]->[$y] ) {
 					$im->setPixel ( $x2 , $y , $color ) ;
 					$dotcache[$x2]->[$y] = 1 ;
 				}
@@ -1031,18 +1031,19 @@ sub draw_indel_snps {
 			$im->string ( gdSmallFont , $x1 , $y-1 , $& , $red ) ;
 		}
 	} else {
-		my $ww = int ( $width / $ft ) ;
-		if ( $ww > 1 ) {
+		my $ww = int ( $width / $ft ) - 1 ;
+		if ( $ww > 0 ) {
 			while ( $seq =~ m/[A-Z]/g ) {
 				my $a = pos ( $seq ) - 1 ;
 				my $x1 = int ( ( $p1 - $from + $a ) * $width / $ft ) ;
 				$im->filledRectangle ( $x1 , $y-2 , $x1 + $ww , $y+2 , $red ) ;
 			}
 		} else {
+			return if $y < 0 ;
 			while ( $seq =~ m/[A-Z]/g ) {
 				my $a = pos ( $seq ) - 1 ;
 				my $x1 = int ( ( $p1 - $from + $a ) * $width / $ft ) ;
-				next if defined $snpcache[$x1]->[$y] ;
+				next if $x1 < 0 or defined $snpcache[$x1]->[$y] ;
 				$im->line ( $x1 , $y-2 , $x1 , $y+2 , $red ) ;
 				$snpcache[$x1]->[$y] = 1 ;
 			}
