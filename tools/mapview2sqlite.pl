@@ -3,11 +3,21 @@
 use strict ;
 use warnings ;
 
-my ( $reference , $mapview , $fragment , $variance ) = @ARGV ;
+my ( $reference , $mapview , $fragment , $variance , $from , $to ) = @ARGV ; # $from, $to are optional
 my %chrs ;
 
 # Read reference genome
 get_reference_from_file ( $reference ) ;
+
+$from = 1 unless defined $from ;
+unless ( defined $to ) {
+	$to = $from ;
+	foreach ( keys %chrs ) {
+		$to = length ( $chrs{$_} ) if $to < length ( $chrs{$_} ) ;
+	}
+}
+$from = int ( $from ) ;
+$to = int ( $to ) ;
 
 # Create database tables
 &create_tables ;
@@ -16,12 +26,15 @@ my $seqlen ;
 my $lastname = '' ;
 #my $lastchr = '' ;
 my @lastdata = () ;
-open MAPVIEW , $mapview ;
+open MAPVIEW , "sort $mapview |" ;
 my $cnt = 0 ;
 while ( <MAPVIEW> ) {
 	chomp ;
 	my ( $basename , @a ) = split "\t" , $_ ;
 	last unless $basename ;
+	
+	$basename =~ s|/[12]$|| ;
+	
 #	last if $cnt > 10000 ; # TESTING
 	$cnt++ ;
 #	if ( $cnt % 100000 == 0 ) {
@@ -55,12 +68,18 @@ close MAPVIEW ;
 sub add_pair {
 	my ( $name , $d1 , $d2 ) = @_ ;
 	return if $d1->[0] ne $d2->[0] ; # Not on the same chromosome, can't handle this...
-	my $seq1 = get_match ( $d1 ) ;
-	my $seq2 = get_match ( $d2 ) ;
 	my $chr = $d1->[0] ;
-	my $inv = $d1->[2] eq $d2->[2] ;
 	my $pos1 = $d1->[1] ;
 	my $pos2 = $d2->[1] ;
+	return unless defined $chrs{$chr} ;
+	return if $pos1 >= length $chrs{$chr} ;
+	return if $pos2 >= length $chrs{$chr} ;
+	
+	return if $pos1 > $to or $pos2 < $from ;
+	
+	my $seq1 = get_match ( $d1 ) ;
+	my $seq2 = get_match ( $d2 ) ;
+	my $inv = $d1->[2] eq $d2->[2] ;
 	
 	if ( $pos1 > $pos2 ) {
 		( $pos1 , $pos2 ) = ( $pos2 , $pos1 ) ;
@@ -81,9 +100,14 @@ sub add_pair {
 # Add a single read
 sub add_single {
 	my ( $name , $d1 ) = @_ ;
-	my $seq = get_match ( $d1 ) ;
 	my $chr = $d1->[0] ;
 	my $pos = $d1->[1] ;
+	return unless defined $chrs{$chr} ;
+	return if $pos >= length $chrs{$chr} ;
+
+	return if $pos > $to or $pos < $from ;
+
+	my $seq = get_match ( $d1 ) ;
 	my $p = sprintf "%s %12d" , $chr , $pos ;
 	print "/*X$p*/ INSERT INTO $chr"."_single (read_name,pos1,seq1) VALUES (\"$name\",$pos,\"$seq\") ;\n" ;
 }

@@ -45,7 +45,7 @@ $display_inversions_ext = 0 unless $display_inversions ;
 # Parameter paranoia
 $from =~ s/\D//g ;
 $to =~ s/\D//g ;
-$chromosome =~ s/[^A-Z0-9]//g ;
+$chromosome =~ s/[^A-Za-z0-9\-_]//g ;
 
 unless ( $view eq 'annotation' or $view eq 'gc' ) {
 	die "ERROR\nNot a valid lane\n" if $database eq '' ;
@@ -95,7 +95,7 @@ foreach ( keys %iupac ) {
 	$iupac_reverse{$iupac{$_}} = $_ ;
 }
 
-if ( $display_pot_snps ) {
+if ( $display_pot_snps and defined  $snp_file ) {
 	my $dbfile = "$datapath/$snp_file";
 	my $dbh = DBI->connect(
 	    "dbi:SQLite:dbname=$dbfile", # DSN: dbi, driver, database file
@@ -157,8 +157,8 @@ foreach ( @databases ) {
 	my ( $smr , $pmr , $sin , $inv , $cig ) ;
 	
 	# Turn off index search over 25K of sequence
-	my $pos1 = ( $to - $from ) > 25000 ? '+pos1' : 'pos1' ;
-	my $pos2 = ( $to - $from ) > 25000 ? '+pos2' : 'pos2' ;
+	my $pos1 = ( $to - $from ) > $use_db_index_cutoff ? '+pos1' : 'pos1' ;
+	my $pos2 = ( $to - $from ) > $use_db_index_cutoff ? 'pos2' : 'pos2' ;
 
 	# Get SNP matches
 	$smr = [] ;
@@ -1063,12 +1063,15 @@ sub dump_image_annotation {
 	my $found_id ;
 	
 	my $dbfile = "$datapath/$annotation_file";
-	my $dbh = DBI->connect(
-	    "dbi:SQLite:dbname=$dbfile", # DSN: dbi, driver, database file
-	    "",                          # no user
-	    "",                          # no password
-	    { RaiseError => 1 },         # complain if something goes wrong
-	) or die "ERROR\n".$DBI::errstr;
+	my $dbh ;
+	if ( defined $annotation_file ) {
+		$dbh = DBI->connect(
+		    "dbi:SQLite:dbname=$dbfile", # DSN: dbi, driver, database file
+	    	"",                          # no user
+		    "",                          # no password
+		    { RaiseError => 1 },         # complain if something goes wrong
+		) or die "ERROR\n".$DBI::errstr;
+	}
 
 	my $ft = $to - $from + 1 ;
 	$height = 20 ;
@@ -1083,7 +1086,10 @@ sub dump_image_annotation {
 	#print $cgi->header(-type=>'text/plain',-expires=>'-1s');
 	my $features = [] ;
 	my $tags_arr = [] ;
-	eval { $features = $dbh->selectall_arrayref ( "SELECT type,start,end,strand,id FROM chr_$chromosome WHERE start <= $to AND end >= $from" ) || [] } ;
+	
+	if ( defined $annotation_file ) {
+		eval { $features = $dbh->selectall_arrayref ( "SELECT type,start,end,strand,id FROM chr_$chromosome WHERE start <= $to AND end >= $from" ) || [] } ;
+	}
 	
 	my %fids ;
 	my ( %ktags , %vtags ) ;
