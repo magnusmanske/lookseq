@@ -801,7 +801,6 @@ sub dump_image_indelview {
 	
 	# Blue/magenta read lines
 	foreach my $current_db ( 0 .. $number_of_databases - 1 ) {
-#		next if $debug_output ;
 		my %meta = %{$all_meta[$current_db]} ;
 		my $rl = $meta{'read_length'} ;
 		my $len = int ( $rl * $width / $ft ) ;
@@ -924,6 +923,7 @@ sub show_debugging_output {
 
 sub draw_indel_pair_links {
 	my ( $im , $arr_ref , $color , $max_dist , $rl , $ft , $len ) = @_ ;
+	return if $len == 1 and scalar ( @{$arr_ref} ) > 100000 ; # Hard cutoff
 	foreach ( @{$arr_ref} ) {
 		my $p1 = $_->[1] ;
 		my $p2 = $_->[2] ;
@@ -932,13 +932,40 @@ sub draw_indel_pair_links {
 		my $x1 = ( $p1 - $from ) * $width / $ft ;
 		my $x2 = ( $p2 - $from ) * $width / $ft ;
 		next if $x1 + 1 >= $x2 ;
-		$im->line ( $x1 , $y , $x2 , $y , $color ) ;
+		if ( $x1 == $x2 ) {
+			$im->setPixel ( $x1 , $y , $color ) ;
+		} else {
+			$im->line ( $x1 , $y , $x2 , $y , $color ) ;
+		}
 	}
 }
 
 sub draw_indel_matches {
 	my ( $im , $arr_ref , $color , $max_dist , $rl , $ft , $len , $dont_draw , $inversion ) = @_ ;
 	my $inversion_height = 15 ; # pixel
+
+	unless ( $dont_draw ) {
+		foreach ( @{$arr_ref} ) {
+			my $p1 = $_->[1] ;
+			my $p2 = $_->[2] ;
+			my $ofs = $p2 - $p1 + $rl ; # Observed fragment size
+			my $y = $height - $ofs * $height / $max_dist ;
+			my $x1 = ( $p1 - $from ) * $width / $ft ;
+			my $x2 = ( $p2 - $from ) * $width / $ft ;
+			
+				if ( $len > 1 ) {
+					$im->line ( $x1 , $y , $x1 + $len , $y , $color ) ;
+					$im->line ( $x2 , $y , $x2 + $len , $y , $color ) ;
+				} elsif ( $len == 1 ) {
+					$im->setPixel ( $x1 , $y , $color ) ;
+					$im->setPixel ( $x2 , $y , $color ) ;
+				}
+		}
+	}
+
+	return unless $display_inversions_ext ;
+
+	# BEGIN EXTENDED INVERSION DISPLAY
 	foreach ( @{$arr_ref} ) {
 		my $p1 = $_->[1] ;
 		my $p2 = $_->[2] ;
@@ -946,17 +973,7 @@ sub draw_indel_matches {
 		my $y = $height - $ofs * $height / $max_dist ;
 		my $x1 = ( $p1 - $from ) * $width / $ft ;
 		my $x2 = ( $p2 - $from ) * $width / $ft ;
-		
-		
-		
-		unless ( $dont_draw ) {
-			$im->line ( $x1 , $y , $x1 + $len , $y , $color ) if $len > 1 ;
-			$im->setPixel ( $x1 , $y , $color ) if $len == 1 ;
-			$im->line ( $x2 , $y , $x2 + $len , $y , $color ) if $len > 1 ;
-			$im->setPixel ( $x2 , $y , $color ) if $len == 1 ;
-		}
-		
-		next unless $display_inversions_ext ;
+
 		my $dir = $_->[5] ;
 		my @dir = split '' , $dir ;
 		my $xm = int ( ( $x1 + $x2 ) / 2 ) ;
@@ -969,15 +986,11 @@ sub draw_indel_matches {
 			$xt = int ( ( $smaller - $from + $avg_frag_size ) * $width / $ft + $len ) ;
 			$middle = $smaller + $ofs*3/4 ;
 			$int_var = $ofs/4 ;
-#			$int_var = ( $avg_frag_size - 2 * $rl ) / 1 ;
-#			$middle = $smaller + ( $ofs - $rl + $avg_frag_size ) / 2 ;
 		}  elsif ( $dir[1] eq '-' ) {
 			$xt = int ( ( $smaller - $from + $ofs ) * $width / $ft ) ;
 			$xf = int ( ( $smaller - $from + $ofs - $avg_frag_size ) * $width / $ft + $len ) ;
 			$middle = $larger - $ofs*3/4 ;
 			$int_var = $ofs/4 ;
-#			$int_var = ( $avg_frag_size - 2 * $rl ) ;
-#			$middle = $larger - ( $ofs - $rl + $avg_frag_size ) / 2 ;
 		} else { next } ;
 		$xf = 0 if $xf < 0 ;
 		if ( '+' eq $dir[1] ) {
@@ -993,8 +1006,8 @@ sub draw_indel_matches {
 		$xf = 0 if $xf < 0 ;
 		foreach my $p ( $xf .. $xt ) { $inversion_middle[$p]++ ; }
 		
-		#$im->string ( gdSmallFont , $x2 , $y , $dir , $color ) ;
 	}
+	# END EXTENDED INVERSION DISPLAY
 }
 
 sub draw_indel_snps {
