@@ -58,6 +58,7 @@ my @all_sin ;
 my @all_inv ;
 my @all_meta ;
 my @all_cig ;
+my @snpcache ;
 my $total_reads = 0 ;
 my $show_chars ; # For pileup; global var easier that passing it through lots'o'methods
 my $do_coverage = $view eq 'coverage' ? 1 : 0 ;
@@ -801,6 +802,7 @@ sub dump_image_indelview {
 	
 	# Blue/magenta read lines
 	foreach my $current_db ( 0 .. $number_of_databases - 1 ) {
+		next if $debug_output ;
 		my %meta = %{$all_meta[$current_db]} ;
 		my $rl = $meta{'read_length'} ;
 		my $len = int ( $rl * $width / $ft ) ;
@@ -846,7 +848,7 @@ sub dump_image_indelview {
 				draw_indel_snps ( $im , $seq2 , $y , $p2 , $ft , $text_mode , $red ) if $seq2 ;
 			}
 		}
-}	
+	}	
 
 	draw_h_axis ( $im , $black ) ;
 	
@@ -1012,6 +1014,7 @@ sub draw_indel_matches {
 
 sub draw_indel_snps {
 	my ( $im , $seq , $y , $p1 , $ft , $text_mode , $red ) = @_ ;
+	return if $y < 0 ;
 
 	if ( $text_mode ) {
 		while ( $seq =~ m/[A-Z]/g ) {
@@ -1032,7 +1035,9 @@ sub draw_indel_snps {
 			while ( $seq =~ m/[A-Z]/g ) {
 				my $a = pos ( $seq ) - 1 ;
 				my $x1 = int ( ( $p1 - $from + $a ) * $width / $ft ) ;
+				next if defined $snpcache[$x1]->[$y] ;
 				$im->line ( $x1 , $y-2 , $x1 , $y+2 , $red ) ;
+				$snpcache[$x1]->[$y] = 1 ;
 			}
 		}
 	}
