@@ -47,6 +47,9 @@ our $snp_file = "snps.sqlite" ;
 # Allows/disallows indexing of the page by robots (set to 'noindex' if you don't want the page to show up on Google et al)
 our $robots_flag = 'index, follow' ;
 
+# Don't use index for database query if region is larger than this
+$use_db_index_cutoff = 20000 ;
+
 # Sanger-specific flag; don't change unless you know what you're doing
 our $use_sanger_layout = 0 ;
 
