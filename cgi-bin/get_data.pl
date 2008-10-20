@@ -801,6 +801,7 @@ sub dump_image_indelview {
 	
 	# Blue/magenta read lines
 	foreach my $current_db ( 0 .. $number_of_databases - 1 ) {
+#		next if $debug_output ;
 		my %meta = %{$all_meta[$current_db]} ;
 		my $rl = $meta{'read_length'} ;
 		my $len = int ( $rl * $width / $ft ) ;
@@ -998,18 +999,28 @@ sub draw_indel_matches {
 
 sub draw_indel_snps {
 	my ( $im , $seq , $y , $p1 , $ft , $text_mode , $red ) = @_ ;
-	foreach my $a ( 0 .. length ( $seq ) - 1 ) {
-		my $c = substr ( $seq , $a , 1 ) ;
-		next if $c ge 'a' and $c le 'z' ;
-		my $x1 = int ( ( $p1 - $from + $a ) * $width / $ft ) ;
-		if ( $text_mode ) {
+
+	if ( $text_mode ) {
+		while ( $seq =~ m/[A-Z]/g ) {
+			my $a = pos ( $seq ) - 1 ;
+			my $x1 = int ( ( $p1 - $from + $a ) * $width / $ft ) ;
 			$im->line ( $x1 , $y-2 , $x1 , $y , $red ) ;
-			$im->string ( gdSmallFont , $x1 , $y-1 , $c , $red ) ;
+			$im->string ( gdSmallFont , $x1 , $y-1 , $& , $red ) ;
+		}
+	} else {
+		my $ww = int ( $width / $ft ) - 1 ;
+		if ( $ww > 0 ) {
+			while ( $seq =~ m/[A-Z]/g ) {
+				my $a = pos ( $seq ) - 1 ;
+				my $x1 = int ( ( $p1 - $from + $a ) * $width / $ft ) ;
+				$im->filledRectangle ( $x1 , $y-2 , $x1 + $ww , $y+2 , $red ) ;
+			}
 		} else {
-			my $x2 = $x1 + int ( $width / $ft ) - 1 ;
-			$x2 = $x1 if $x2 < $x1 ;
-			$im->line ( $x1 , $y-2 , $x2 , $y+2 , $red ) if $x1 == $x2 ;
-			$im->filledRectangle ( $x1 , $y-2 , $x2 , $y+2 , $red ) if $x1 < $x2 ;
+			while ( $seq =~ m/[A-Z]/g ) {
+				my $a = pos ( $seq ) - 1 ;
+				my $x1 = int ( ( $p1 - $from + $a ) * $width / $ft ) ;
+				$im->line ( $x1 , $y-2 , $x1 , $y+2 , $red ) ;
+			}
 		}
 	}
 }
@@ -1306,7 +1317,11 @@ sub dump_image_gc {
 	print $im->png () ;
 }
 
-
+# if ( $debug_output ) {
+	# print $cgi->header(-type=>'text/plain',-expires=>'-1s'); # For debugging output
+	# print tv_interval ( $time0 ); ;
+	# exit ;
+# }
 
 
 if ( $output eq 'image' ) {
