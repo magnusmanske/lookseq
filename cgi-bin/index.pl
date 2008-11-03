@@ -54,7 +54,7 @@ sub prepare_myscript {
 
 	my $show = $cgi->param('show') || '' ;
 	my $lane = $cgi->param('lane') || '' ;
-	if ( $lane ne '' and $show =~ m/^([\w\d]+):(\d+)-(\d+),([a-z]+)$/ ) {
+	if ( $lane ne '' and $show =~ m/^([\w\d\._]+):(\d+)-(\d+),([a-z]+)$/ ) {
 		$myscript .= "var use_init = true ;\nvar init_chr = \"$1\" ;\nvar init_from = $2 ;\nvar init_to = $3 ;\nvar init_mode = \"$4\" ;\nvar init_lane = \"$lane\" ;\n" ;
 	} else {
 		$myscript .= "var use_init = false ;\n" ;
