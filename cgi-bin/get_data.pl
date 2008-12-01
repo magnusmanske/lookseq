@@ -39,6 +39,7 @@ my $display_single = $display =~ m/\|single\|/ ;
 my $display_pair_links = $display =~ m/\|pairlinks\|/ ;
 my $display_pot_snps = $display =~ m/\|potsnps\|/ ;
 my $display_noscale = $display =~ m/\|noscale\|/ ;
+my $display_inline_annotation = 1 ; # FIXME
 
 $display_inversions_ext = 0 unless $display_inversions ;
 
@@ -58,8 +59,11 @@ my @all_sin ;
 my @all_inv ;
 my @all_meta ;
 my @all_cig ;
+my @all_ann ;
 my @snpcache ;
 my @dotcache ;
+my @anno_sum ;
+my @anno_count ;
 my $total_reads = 0 ;
 my $show_chars ; # For pileup; global var easier that passing it through lots'o'methods
 my $do_coverage = $view eq 'coverage' ? 1 : 0 ;
@@ -156,7 +160,7 @@ foreach ( @databases ) {
 	my $cpm = $chromosome . '_perfect_match' ;
 	my $csm = $chromosome . '_snp_match' ;
 
-	my ( $smr , $pmr , $sin , $inv , $cig ) ;
+	my ( $smr , $pmr , $sin , $inv , $cig , $ann ) ;
 	
 	# Turn off index search over 25K of sequence
 	my $pos1 = ( $to - $from ) > $use_db_index_cutoff ? '+pos1' : 'pos1' ;
@@ -184,14 +188,26 @@ foreach ( @databases ) {
 		my $sin_table = $chromosome . '_single' ;
 		my $inv_table = $chromosome . '_inversions' ;
 		$sin = $display_single ? $dbh->selectall_arrayref ( "SELECT read_name,pos1,seq1 FROM $sin_table WHERE $pos1 BETWEEN $from2 AND $to2" ) : [] ;
+		$inv = [] ;
 		if ( $meta{'dbversion'} > 2 ) {
-			$inv = $display_inversions ? $dbh->selectall_arrayref ( "SELECT read_name,pos1,pos2,seq1,seq2,dir FROM $inv_table WHERE ( $pos1 BETWEEN $from2 AND $to2 ) OR ( $pos2 BETWEEN $from2 AND $to2 )" ) : [] ;
+			eval {
+				$inv = $display_inversions ? $dbh->selectall_arrayref ( "SELECT read_name,pos1,pos2,seq1,seq2,dir FROM $inv_table WHERE ( $pos1 BETWEEN $from2 AND $to2 ) OR ( $pos2 BETWEEN $from2 AND $to2 )" ) : [] ;
+			} ;
 		} else {
-			$inv = $display_inversions ? $dbh->selectall_arrayref ( "SELECT read_name,pos1,pos2,seq1,seq2 FROM $inv_table WHERE ( $pos1 BETWEEN $from2 AND $to2 ) OR ( $pos2 BETWEEN $from2 AND $to2 )" ) : [] ;
+			eval {
+				$inv = $display_inversions ? $dbh->selectall_arrayref ( "SELECT read_name,pos1,pos2,seq1,seq2 FROM $inv_table WHERE ( $pos1 BETWEEN $from2 AND $to2 ) OR ( $pos2 BETWEEN $from2 AND $to2 )" ) : [] ;
+			}
 		}
 	} else {
 		$sin = [] ;
 		$inv = [] ;
+	}
+	
+	$ann = [] ;
+	if ( $meta{'dbversion'} > 3 ) {
+		eval { 
+			$ann = $dbh->selectall_arrayref ( "SELECT text,pos,height,length,colorcode FROM ${chromosome}_annotation WHERE pos <= $to AND pos+length >= $from" ) || [] ;
+		} ;
 	}
 	
 	$total_reads += scalar ( @{$smr} ) ;
@@ -205,6 +221,7 @@ foreach ( @databases ) {
 	push @all_sin , $sin ;
 	push @all_inv , $inv ;
 	push @all_cig , $cig ;
+	push @all_ann , $ann ;
 	push @all_meta , \%meta ;
 }
 
@@ -717,7 +734,10 @@ sub dump_image_indelview {
 	my $inversion_left_color = $im->colorAllocate ( 0xB6 , 0xBA , 0x18 ) ; # B6BA18
 	my $inversion_right_color = $im->colorAllocate ( 0x7C , 0xEB , 0x98 ) ; # 7CEB98
 	my $inversion_middle_color = $im->colorAllocate ( 0x99 , 0xD2 , 0x58 ) ; # 99D258
+	my $orange = $im->colorAllocate ( 0xFF , 0xAA , 0x00 ) ;
 	my $grey = $im->colorAllocate ( 200 , 200 , 200 ) ;
+	
+	my @ann_color = ( $black , $blue , $red , $single_color , $orange , $inversion_right_color, $inversion_middle_color , $variance_color  , $inversion_left_color , $inversion_color ) ;
 	
 	if ( $number_of_databases > 0 ) {
 		my %meta = %{$all_meta[0]} ;
@@ -810,9 +830,48 @@ sub dump_image_indelview {
 		$avg_frag_size = $meta{'fragment'} || 0 ;
 		
 		# Perfect and SNP matches
+		draw_inline_annotation ( $im , $all_ann[$current_db] , \@ann_color , $max_dist , $rl , $ft ) if $display_inline_annotation ;
 		draw_indel_matches ( $im , $all_pmr[$current_db] , $blue , $max_dist , $rl , $ft , $len ) if $display_perfect ;
 		draw_indel_matches ( $im , $all_smr[$current_db] , $blue , $max_dist , $rl , $ft , $len ) if $display_snps ;
 		draw_indel_matches ( $im , $all_inv[$current_db] , $inversion_color , $max_dist , $rl , $ft , $len , 0 , $meta{'dbversion'} > 2 ) if $display_inversions ;
+	}
+	
+	# Moving annotation average
+	if ( 0 < scalar @anno_sum ) {
+		foreach my $col ( 0 .. $#anno_sum ) {
+			my ( @x , @y ) ;
+			foreach my $pos ( 0 .. $width ) {
+				if ( defined $anno_sum[$col]->[$pos] ) {
+					$y[$pos] = $anno_sum[$col]->[$pos] / $anno_count[$col]->[$pos] ;
+					push @x , $pos ;
+				}
+			}
+			next if scalar ( @x ) == 0 ;
+			foreach my $p ( 1 .. $#x ) {
+				my $dist = $x[$p] - $x[$p-1] ;
+				my $diff = $y[$x[$p]] - $y[$x[$p-1]] ;
+				foreach ( $x[$p-1]+1 .. $x[$p]-1 ) {
+					$y[$_] = $diff * ( $_ - $x[$p-1] ) / $dist + $y[$x[$p-1]] ;
+				}
+			}
+			foreach ( 0 .. $x[0] ) {
+				$y[$_] = $y[$x[0]] ;
+			}
+			foreach ( $x[$#x] .. $width ) {
+				$y[$_] = $y[$x[$#x]] ;
+			}
+
+			# Smoothing
+			foreach my $iter ( 0 .. 100 ) {
+				foreach ( 1 .. $width-2 ) {
+					$y[$_] = ( $y[$_-1] + $y[$_] + $y[$_+1] ) / 3 ;
+				}
+			}
+
+			foreach ( 1 .. $width-1 ) {
+				$im->line ( $_-1 , int($y[$_-1]) , $_ , int($y[$_]) , $ann_color[$col] ) ;
+			}
+		}
 	}
 	
 	# CIGAR
@@ -868,6 +927,32 @@ sub dump_image_indelview {
 	print $cgi->header(-type=>'image/png',-expires=>'-1s');
 	binmode STDOUT;
 	print $im->png () ;
+}
+
+sub draw_inline_annotation {
+	my ( $im , $dbref , $colref , $max_dist , $rl , $ft ) = @_ ;
+	my $show_text = $ft <= 25000 ? 1 : 0 ;
+	foreach ( @{$dbref} ) { # text,pos,height,length,colorcode
+		my $p1 = $_->[1] ;
+		my $p2 = $p1 + $_->[3] ;
+		my $ofs = $_->[2] ;
+		my $colorcode = $_->[4] ;
+		my $y = $height - $ofs * $height / $max_dist ;
+		my $x1 = ( $p1 - $from ) * $width / $ft ;
+		my $x2 = ( $p2- $from ) * $width / $ft ;
+		my $draw = $colorcode > 0 ;
+		$x1 = 0 if $x1 < 0 ;
+		next if $x2 < $x1 ;
+		if ( $draw ) {
+			$im->line ( $x1 , $y , $x2 , $y , $colref->[$colorcode] ) if $x2 > $x1 ;
+			$im->setPixel ( $x1 , $y , $colref->[$colorcode] ) if $x2 == $x1 ;
+		}
+		foreach ( $x1 .. $x2 ) {
+			$anno_sum[$colorcode]->[$_] += $y ;
+			$anno_count[$colorcode]->[$_]++ ;
+		}
+#		$im->string ( gdSmallFont , $x1 , $y , $_->[0] , $draw ? $colref->[$colorcode] : $colref->[0] ) if $show_text ;
+	}
 }
 
 sub draw_indel_cigar {
