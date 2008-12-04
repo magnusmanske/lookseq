@@ -25,15 +25,23 @@ my %i18n ;
 sub prepare_myscript {
 	$myscript = '' ;
 	my $test = $cgi->param('test') || 0 ;
-	opendir(DIR, $datapath) || die "can't opendir $datapath: $!";
-    my @dbs = grep { /\.sqlite$/ } readdir(DIR);
-    closedir DIR;
+	
 	$myscript .= "var current_lane = '' ;\n" ;
 	$myscript .= "var lanes = new Array () ;\n" ;
-	foreach ( sort @dbs ) {
-		next if $_ eq $annotation_file ;
-		next if $_ eq $snp_file ;
-		$myscript .= "lanes.push ( \"$_\" ) ;\n" ;
+	
+	if ( $use_mysql ) {
+		foreach ( @mysql_dbs ) {
+			$myscript .= "lanes.push ( \"$_\" ) ;\n" ;
+		}
+	} else {
+		opendir(DIR, $datapath) || die "can't opendir $datapath: $!";
+	    my @dbs = grep { /\.sqlite$/ } readdir(DIR);
+	    closedir DIR;
+		foreach ( sort @dbs ) {
+			next if $_ eq $annotation_file ;
+			next if $_ eq $snp_file ;
+			$myscript .= "lanes.push ( \"$_\" ) ;\n" ;
+		}
 	}
 	
 	my $width = $cgi->param('width') || 1024 ;

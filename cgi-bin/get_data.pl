@@ -120,18 +120,28 @@ if ( $display_pot_snps and defined  $snp_file ) {
 
 my @databases = split ( ',' , $database ) ;
 foreach ( @databases ) {
-	$_ =~ s/[^a-zA-Z0-9_\-\.]//g ;
-	next if "$_.sqlite" eq $snp_file ;
-	next if "$_.sqlite" eq $annotation_file ;
+	my $dbh ;
+
+	if ( $use_mysql ) {
+		next unless in_array ( \@mysql_dbs , $_ ) ;
+		$dbh = DBI->connect("DBI:mysql:database=$_;host=$mysql_server;port=$mysql_port",
+                   $mysql_user, $mysql_password,
+                   {'RaiseError' => 1});
+
+	} else {
+		$_ =~ s/[^a-zA-Z0-9_\-\.]//g ;
+		next if "$_.sqlite" eq $snp_file ;
+		next if "$_.sqlite" eq $annotation_file ;
 	
-	my $dbfile = "$datapath/$_.sqlite";
-	next unless -e $dbfile ;
-	my $dbh = DBI->connect(
-	    "dbi:SQLite:dbname=$dbfile", # DSN: dbi, driver, database file
-	    "",                          # no user
-	    "",                          # no password
-	    { RaiseError => 1 },         # complain if something goes wrong
-	) or die "ERROR\n".$DBI::errstr;
+		my $dbfile = "$datapath/$_.sqlite";
+		next unless -e $dbfile ;
+		my $dbh = DBI->connect(
+		    "dbi:SQLite:dbname=$dbfile", # DSN: dbi, driver, database file
+		    "",                          # no user
+		    "",                          # no password
+		    { RaiseError => 1 },         # complain if something goes wrong
+		) or die "ERROR\n".$DBI::errstr;
+	}
 
 	# Check chromosomes
 	my $chrsr = $dbh->selectall_arrayref ( "SELECT name FROM chromosomes" ) ;
@@ -146,7 +156,8 @@ foreach ( @databases ) {
 	$number_of_databases++ ;
 
 	# Read metadata
-	my $metar = $dbh->selectall_arrayref ( "SELECT key,value FROM meta" ) ;
+	my $keyname = $use_mysql ? 'the_key' : 'key' ;
+	my $metar = $dbh->selectall_arrayref ( "SELECT $keyname,value FROM meta" ) ;
 	my %meta = {} ;
 	foreach ( @{$metar} ) {
 		$meta{$_->[0]} = $_->[1] ;
@@ -160,42 +171,56 @@ foreach ( @databases ) {
 	my $cpm = $chromosome . '_perfect_match' ;
 	my $csm = $chromosome . '_snp_match' ;
 
-	my ( $smr , $pmr , $sin , $inv , $cig , $ann ) ;
+	my ( $smr , $pmr , $sin , $inv , $cig , $ann , $rl_ref ) ;
 	
 	# Turn off index search over 25K of sequence
-	my $pos1 = ( $to - $from ) > $use_db_index_cutoff ? '+pos1' : 'pos1' ;
-	my $pos2 = ( $to - $from ) > $use_db_index_cutoff ? 'pos2' : 'pos2' ;
-
+	my ( $pos1 , $pos2 , $irl ) ;
+	if ( $use_mysql ) {
+		$pos1 = 'pos1' ;
+		$pos2 = 'pos2' ;
+		$irl = ",read_length_index" ;
+		my $dummy = $dbh->selectall_arrayref ( "SELECT id,len1,len2 FROM read_length" ) ;
+		foreach ( @{$dummy} ) {
+			my $k = $_->[0] ;
+			$rl_ref->{$k}->{'len1'} = $_->[1] ;
+			$rl_ref->{$k}->{'len2'} = $_->[2] ;
+		}
+	} else {
+		$pos1 = ( $to - $from ) > $use_db_index_cutoff ? '+pos1' : 'pos1' ;
+		$pos2 = ( $to - $from ) > $use_db_index_cutoff ? 'pos2' : 'pos2' ;
+		$irl = '' ;
+	}
+	
 	# Get SNP matches
 	$smr = [] ;
 	eval {
-		$smr = $display_snps ? $dbh->selectall_arrayref ( "SELECT read_name,pos1,pos2,seq1,seq2 FROM $csm WHERE ( $pos1 BETWEEN $from2 AND $to2 ) OR ( $pos2 BETWEEN $from2 AND $to2 )" ) : [] ;
+		$smr = $display_snps ? $dbh->selectall_arrayref ( "SELECT read_name,pos1,pos2,seq1,seq2 $irl FROM $csm WHERE ( $pos1 BETWEEN $from2 AND $to2 ) OR ( $pos2 BETWEEN $from2 AND $to2 )" ) : [] ;
 	} ;
-
+	
 	# Get perfect matches
 	$pmr = [] ;
 	eval {
-		$pmr = $display_perfect ? $dbh->selectall_arrayref ( "SELECT read_name,pos1,pos2 FROM $cpm WHERE ( $pos1 BETWEEN $from2 AND $to2 ) OR ( $pos2 BETWEEN $from2 AND $to2 )" ) : [] ;
+		$pmr = $display_perfect ? $dbh->selectall_arrayref ( "SELECT read_name,pos1,pos2 $irl FROM $cpm WHERE ( $pos1 BETWEEN $from2 AND $to2 ) OR ( $pos2 BETWEEN $from2 AND $to2 )" ) : [] ;
 	} ;
 	
 	# Get CIGAR data, if any
 	$cig = [] ;
 	eval { 
-		$cig = $dbh->selectall_arrayref ( "SELECT name,start,stop,orientation,data FROM cigar WHERE chromosome=\"$chromosome\" AND start <= $to AND stop >= $from" ) || [] ;
+		$cig = $dbh->selectall_arrayref ( "SELECT name,start,stop,orientation,data $irl FROM cigar WHERE chromosome=\"$chromosome\" AND start <= $to AND stop >= $from" ) || [] ;
 	} ;
 	
 	if ( $meta{'dbversion'} > 1 ) {
 		my $sin_table = $chromosome . '_single' ;
 		my $inv_table = $chromosome . '_inversions' ;
-		$sin = $display_single ? $dbh->selectall_arrayref ( "SELECT read_name,pos1,seq1 FROM $sin_table WHERE $pos1 BETWEEN $from2 AND $to2" ) : [] ;
+		$sin = $display_single ? $dbh->selectall_arrayref ( "SELECT read_name,pos1,seq1 $irl FROM $sin_table WHERE $pos1 BETWEEN $from2 AND $to2" ) : [] ;
 		$inv = [] ;
 		if ( $meta{'dbversion'} > 2 ) {
 			eval {
-				$inv = $display_inversions ? $dbh->selectall_arrayref ( "SELECT read_name,pos1,pos2,seq1,seq2,dir FROM $inv_table WHERE ( $pos1 BETWEEN $from2 AND $to2 ) OR ( $pos2 BETWEEN $from2 AND $to2 )" ) : [] ;
+				$inv = $display_inversions ? $dbh->selectall_arrayref ( "SELECT read_name,pos1,pos2,seq1,seq2,dir $irl FROM $inv_table WHERE ( $pos1 BETWEEN $from2 AND $to2 ) OR ( $pos2 BETWEEN $from2 AND $to2 )" ) : [] ;
 			} ;
 		} else {
 			eval {
-				$inv = $display_inversions ? $dbh->selectall_arrayref ( "SELECT read_name,pos1,pos2,seq1,seq2 FROM $inv_table WHERE ( $pos1 BETWEEN $from2 AND $to2 ) OR ( $pos2 BETWEEN $from2 AND $to2 )" ) : [] ;
+				$inv = $display_inversions ? $dbh->selectall_arrayref ( "SELECT read_name,pos1,pos2,seq1,seq2 $irl FROM $inv_table WHERE ( $pos1 BETWEEN $from2 AND $to2 ) OR ( $pos2 BETWEEN $from2 AND $to2 )" ) : [] ;
 			}
 		}
 	} else {
@@ -216,6 +241,18 @@ foreach ( @databases ) {
 	$total_reads += scalar ( @{$inv} ) ;
 	$total_reads += scalar ( @{$cig} ) ;
 	
+	if ( $use_mysql ) {
+		fix_index_read_length_mysql ( $smr , $rl_ref , 1 ) ;
+		fix_index_read_length_mysql ( $pmr , $rl_ref , 1 ) ;
+		fix_index_read_length_mysql ( $inv , $rl_ref , 1 ) ;
+		fix_index_read_length_mysql ( $sin , $rl_ref , 0 ) ;
+	} else {
+		fix_index_read_length_sqlite ( $smr , $meta{'read_length'} , 1 ) ;
+		fix_index_read_length_sqlite ( $pmr , $meta{'read_length'} , 1 ) ;
+		fix_index_read_length_sqlite ( $inv , $meta{'read_length'} , 1 ) ;
+		fix_index_read_length_sqlite ( $sin , $meta{'read_length'} , 0 ) ;
+	}
+	
 	push @all_smr , $smr ;
 	push @all_pmr , $pmr ;
 	push @all_sin , $sin ;
@@ -225,6 +262,25 @@ foreach ( @databases ) {
 	push @all_meta , \%meta ;
 }
 
+
+sub fix_index_read_length_mysql {
+	my ( $ref , $rl_ref , $pair ) = @_ ;
+	foreach ( 0 .. scalar(@{$ref})-1 ) {
+		my $k = pop @{$ref->[$_]} ;
+		my $rl1 = $rl_ref->{$k}->{'len1'} ;
+		my $rl2 = $rl_ref->{$k}->{'len2'} ;
+		push @{$ref->[$_]} , $rl1 ;
+		push @{$ref->[$_]} , $rl2 if $pair ;
+	}
+}
+
+sub fix_index_read_length_sqlite {
+	my ( $ref , $rl , $pair ) = @_ ;
+	foreach ( 0 .. scalar(@{$ref})-1 ) {
+		push @{$ref->[$_]} , $rl ;
+		push @{$ref->[$_]} , $rl if $pair ;
+	}
+}
 
 
 #_________________________________________
@@ -339,42 +395,62 @@ sub dump_image_pileupview {
 
 	$refseq = get_chromosome_part ( $genome_file , $chromosome , $from , $to ) ;
 	
+#	print $cgi->header(-type=>'text/plain',-expires=>'-1s') ;
 	foreach my $current_db ( 0 .. $#all_meta ) {
 		my %meta = %{$all_meta[0]} ;
-		my $rl = $meta{'read_length'} ;
+#		my $rl = $meta{'read_length'} ;
 		$show_chars = $width / $ft > 4 ? 1 : 0 ;
 		my $sin = $all_sin[$current_db] ;
 
 		foreach ( 0 .. @$sin ) {
+			next unless defined $sin->[$_] ;
+			my $rl = pop @{$sin->[$_]} ;
 			$sin->[$_]->[3] = $sin->[$_]->[2] ;
 			$sin->[$_]->[2] = -1 ; 
+			push @{$sin->[$_]} , undef ;
+			push @{$sin->[$_]} , $rl ;
+			push @{$sin->[$_]} , $rl ;
+#			print join ", " , @{$sin->[$_]} ;
+#			print "\n" ;
+		}
+
+		my $pmr = $all_pmr[$current_db] ;
+		foreach ( 0 .. @$pmr ) {
+			$pmr->[$_]->[5] = $pmr->[$_]->[3] ;
+			$pmr->[$_]->[6] = $pmr->[$_]->[4] ;
+			$pmr->[$_]->[3] = undef ;
+			$pmr->[$_]->[4] = undef ;
 		}
 	}
+#exit;
 
-#	print $cgi->header(-type=>'text/plain',-expires=>'-1s') if $paired_pileup == 0 ;
-	
+#	print "___1\n" ;
 	foreach my $current_db ( 0 .. $#all_meta ) {
 		%cur_meta = %{$all_meta[$current_db]} ;
 		pile2bands_cigar ( $all_cig[$current_db] , \@bands , \@btype , 3 ) ;
 	}
+#	print "___2\n" ;
 	foreach my $current_db ( 0 .. $#all_meta ) {
 		%cur_meta = %{$all_meta[$current_db]} ;
 		pile2bands ( $all_smr[$current_db] , \@bands , \@btype , $all_meta[$current_db]->{'read_length'} , 0 , $paired_pileup , $all_meta[$current_db]->{'fragment'} ) ;
 	}
+#	print "___3\n" ;
 	foreach my $current_db ( 0 .. $#all_meta ) {
 		%cur_meta = %{$all_meta[$current_db]} ;
 		pile2bands ( $all_pmr[$current_db] , \@bands , \@btype , $all_meta[$current_db]->{'read_length'} , 0 , $paired_pileup , $all_meta[$current_db]->{'fragment'} ) ;
 	}
+#	print "___4\n" ;
 	foreach my $current_db ( 0 .. $#all_meta ) {
 		%cur_meta = %{$all_meta[$current_db]} ;
 		pile2bands ( $all_inv[$current_db] , \@bands , \@btype , $all_meta[$current_db]->{'read_length'} , 2 , $paired_pileup , $all_meta[$current_db]->{'fragment'} ) ;
 	}
+#	print "___5\n" ;
 	foreach my $current_db ( 0 .. $#all_meta ) {
 		%cur_meta = %{$all_meta[$current_db]} ;
 		pile2bands ( $all_sin[$current_db] , \@bands , \@btype , $all_meta[$current_db]->{'read_length'} , 1 , 0 , $all_meta[$current_db]->{'fragment'} ) ;
 	}
 	
-#	exit if $paired_pileup ;
+#	exit ;
 	
 	if ( $output eq 'text' ) {
 		print $cgi->header(-type=>'text/plain',-expires=>'-1s');
@@ -515,32 +591,35 @@ sub dump_image_pileupview {
 
 sub pile2bands {
 	my ( $r_reads , $r_bands , $r_btype , $rl , $mode , $paired_pileup , $fragment ) = @_ ;
-	my $from_rl = $from - $rl ;
 
 	if ( $paired_pileup == 1 ) {
 		foreach my $read ( @{$r_reads} ) {
+			my ( $rl1 , $rl2 ) = ( $read->[scalar(@{$read})-2] , $read->[scalar(@{$read})-1] ) ;
 			my ( $from1 , $from2  ) = ( $read->[1] , $read->[2] ) ;
 			next if $from2 < 0 ; # No single reads...
 			next if $from1 + $rl < $from and $from2 > $to ;
-			my $dist = $from2 - $from1 + 1 + $rl ;
-			my $between = $from2 - $from1 - $rl ;
-			my $seq = pileup_my_refseq_part ( $from1 , $read->[3] , $rl ) ;
+			my $dist = $from2 - $from1 + 1 + $rl2 ;
+			my $between = $from2 - $from1 - $rl1 ;
+			my $seq = pileup_my_refseq_part ( $from1 , $read->[3] , $rl1 ) ;
 			$seq .= '_' x $between ;
-			$seq .= pileup_my_refseq_part ( $from2 , $read->[4] , $rl ) ;
+			$seq .= pileup_my_refseq_part ( $from2 , $read->[4] , $rl2 ) ;
 			$seq =~ tr/ /_/ ;
 			next if $seq =~ /^_*$/ ;
 			add_pileup ( $from1 , $seq , length ( $seq ) , $r_bands , $r_btype , $mode , $dist ) ;
 		}
 	} else {
 		foreach my $read ( @{$r_reads} ) {
+			my ( $rl1 , $rl2 ) = ( $read->[scalar(@{$read})-2] , $read->[scalar(@{$read})-1] ) ;
 			my ( $from1 , $from2  ) = ( $read->[1] , $read->[2] ) ;
-			my $dist = $from2 > 0 ? $from2 - $from1 + 1 + $rl : $fragment ;
+			my $dist = $from2 > 0 ? $from2 - $from1 + 1 + $rl2 : $fragment ;
 			
-			if ( $from1 <= $to and $from1 >= $from_rl ) {
-				add_pileup ( $from1 , $read->[3] , $rl , $r_bands , $r_btype , $mode , $dist ) ;
+#			print ":" . join ( ',' , @{$read} ) . "\n" ;
+			
+			if ( $from1 <= $to and $from1 >= $from - $rl1 ) {
+				add_pileup ( $from1 , $read->[3] , $rl1 , $r_bands , $r_btype , $mode , $dist ) ;
 			}
-			if ( $from2 <= $to and $from2 >= $from_rl ) {
-				add_pileup ( $from2 , $read->[4] , $rl , $r_bands , $r_btype , $mode , $dist ) ;
+			if ( $from2 <= $to and $from2 >= $from - $rl2 ) {
+				add_pileup ( $from2 , $read->[4] , $rl2 , $r_bands , $r_btype , $mode , $dist ) ;
 			}
 		}
 	}
@@ -578,6 +657,7 @@ sub add_pileup {
 			$out .= lc substr ( $refseq , $onref , 1 ) ;
 		}
 	}
+#	print "$read_sequence\t$out\n" ;
 	return unless defined $min ;
 	
 	my $use_band ;
@@ -758,12 +838,10 @@ sub dump_image_indelview {
 	if ( $display_single ) {
 		my @stack ;
 		$stack[$_] = 0 foreach ( 0 .. $width ) ;
+		my @stacklen ;
 		foreach my $current_db ( 0 .. $number_of_databases - 1 ) {
 			my %meta = %{$all_meta[$current_db]} ;
 			my $sin = $all_sin[$current_db] ;
-			my $rl = $meta{'read_length'} ;
-			my $len = int ( $rl * $width / $ft ) ;
-			$len = 1 if $len < 1 ;
 			my $upper = $height - ( $meta{'fragment'} + $meta{'variance'} ) ;
 			foreach ( @{$sin} ) {
 				my $p1 = $_->[1] ;
@@ -772,11 +850,15 @@ sub dump_image_indelview {
 				next if $x1 < 0 ;
 				#$stack[$_]++ foreach ( $x1 .. $x1 + $rl ) ;
 				$stack[$x1]++ ;
+				my $rl = $_->[scalar(@{$_})-1] ;
+				my $len = int ( $rl * $width / $ft ) ;
+				$len = 1 if $len < 1 ;
+				$stacklen[$x1] = $len ;
 			}
 			foreach ( 0 .. $width-1 ) {
 				next unless $stack[$_] ;
-				$im->line ( $_ , 0 , $_ , $stack[$_] , $single_color ) if $len == 1 ;
-				$im->filledRectangle ( $_ , 0 , $_+$len , $stack[$_] , $single_color ) if $len > 1 ;
+				$im->line ( $_ , 0 , $_ , $stack[$_] , $single_color ) if  $stacklen[$_]  == 1 ;
+				$im->filledRectangle ( $_ , 0 , $_+$stacklen[$_] , $stack[$_] , $single_color ) if $stacklen[$_] > 1 ;
 			}
 		}
 	}
@@ -886,7 +968,6 @@ sub dump_image_indelview {
 		}
 	}
 	
-
 	# SNPs
 	foreach my $current_db ( 0 .. $number_of_databases - 1 ) {
 		my $smr = $all_smr[$current_db] ;
@@ -896,12 +977,13 @@ sub dump_image_indelview {
 		# SNPs for SNP matches
 		if ( $display_snps ) {
 			foreach ( @{$smr} ) {
+				my ( $rl1 , $rl2 ) = ( $_->[scalar(@{$_})-2] , $_->[scalar(@{$_})-1] ) ;
 				my $seq1 = $_->[3] ;
 				my $seq2 = $_->[4] ;
 				next unless $seq1 or $seq2 ;
 				my $p1 = $_->[1] ;
 				my $p2 = $_->[2] ;
-				my $ofs = $p2 - $p1 + $rl ; # Observed fragment size
+				my $ofs = $p2 - $p1 + $rl2 ; # Observed fragment size
 				my $y = $height - $ofs * $height / $max_dist ;
 				draw_indel_snps ( $im , $seq1 , $y , $p1 , $ft , $text_mode , $red ) if $seq1 ;
 				draw_indel_snps ( $im , $seq2 , $y , $p2 , $ft , $text_mode , $red ) if $seq2 ;
@@ -1010,11 +1092,12 @@ sub show_debugging_output {
 
 sub draw_indel_pair_links {
 	my ( $im , $arr_ref , $color , $max_dist , $rl , $ft , $len ) = @_ ;
-	return if $len == 1 and scalar ( @{$arr_ref} ) > 100000 ; # Hard cutoff
+	return if scalar ( @{$arr_ref} ) > 100000 ; # Hard cutoff # $len == 1 and 
 	foreach ( @{$arr_ref} ) {
+		my ( $rl2 ) = ( $_->[scalar(@{$_})-1] ) ;
 		my $p1 = $_->[1] ;
 		my $p2 = $_->[2] ;
-		my $ofs = $p2 - $p1 + $rl ; # Observed fragment size
+		my $ofs = $p2 - $p1 + $rl2 ; # Observed fragment size
 		my $y = $height - $ofs * $height / $max_dist ;
 		my $x1 = ( $p1 - $from ) * $width / $ft ;
 		my $x2 = ( $p2 - $from ) * $width / $ft ;
@@ -1033,17 +1116,21 @@ sub draw_indel_matches {
 
 	unless ( $dont_draw ) {
 		foreach ( @{$arr_ref} ) {
+			my ( $rl1 , $rl2 ) = ( $_->[scalar(@{$_})-2] , $_->[scalar(@{$_})-1] ) ;
 			my $p1 = $_->[1] ;
 			my $p2 = $_->[2] ;
-			my $ofs = $p2 - $p1 + $rl ; # Observed fragment size
+			my $ofs = $p2 - $p1 + $rl2 ; # Observed fragment size
 			my $y = $height - $ofs * $height / $max_dist ;
 			next if $y < 0 ;
 			my $x1 = ( $p1 - $from ) * $width / $ft ;
 			my $x2 = ( $p2 - $from ) * $width / $ft ;
 			
-			if ( $len > 1 ) {
-				$im->line ( $x1 , $y , $x1 + $len , $y , $color ) ;
-				$im->line ( $x2 , $y , $x2 + $len , $y , $color ) ;
+			my $len1 = int ( $rl1 * $width / $ft ) ;
+			my $len2 = int ( $rl2 * $width / $ft ) ;
+			
+			if ( $len1 > 1 or $len2 > 1 ) {
+				$im->line ( $x1 , $y , $x1 + $len1 , $y , $color ) ;
+				$im->line ( $x2 , $y , $x2 + $len2 , $y , $color ) ;
 			} elsif ( $len == 1 ) {
 				unless ( $x1 < 0 or defined $dotcache[$x1]->[$y] ) {
 					$im->setPixel ( $x1 , $y , $color ) ;
@@ -1061,6 +1148,7 @@ sub draw_indel_matches {
 
 	# BEGIN EXTENDED INVERSION DISPLAY
 	foreach ( @{$arr_ref} ) {
+		my ( $rl2 ) = ( $_->[scalar(@{$_})-1] ) ;
 		my $p1 = $_->[1] ;
 		my $p2 = $_->[2] ;
 		my $ofs = $p2 - $p1 + $rl ; # Observed fragment size
@@ -1426,6 +1514,14 @@ sub dump_image_gc {
 	print $cgi->header(-type=>'image/png',-expires=>'-1s');
 	binmode STDOUT;
 	print $im->png () ;
+}
+
+sub in_array {
+    my ($arr,$search_for) = @_;
+    foreach my $value (@$arr) {
+        return 1 if $value eq $search_for;
+    }
+    return 0;
 }
 
 # if ( $debug_output ) {

@@ -13,6 +13,7 @@ use AutoLoader qw(AUTOLOAD);
 our @ISA = qw(Exporter);
 our @EXPORT = qw( 
 	$datapath $genome_file $webroot $docroot $htmlpath $use_sanger_layout $tooltitle $cgi_path $annotation_file $snp_file $robots_flag
+	$use_mysql $mysql_server $mysql_port $mysql_user $mysql_password @mysql_dbs
 );
 
 # Tool title
@@ -43,6 +44,11 @@ our $annotation_file = 'annotation.sqlite' ;
 # The file name of the known SNP database. The file must be in the $datapath directory
 # Leave undefined if no known SNP data is present.
 our $snp_file = "snps.sqlite" ;
+
+# MySQL settings, deactivated by default
+our $use_mysql = 0 ;
+our ( $mysql_server , $mysql_port , $mysql_user , $mysql_password , @mysql_dbs ) ;
+
 
 # Allows/disallows indexing of the page by robots (set to 'noindex' if you don't want the page to show up on Google et al)
 our $robots_flag = 'index, follow' ;
