@@ -203,10 +203,19 @@ function is_MSIE () {
 
 function create_lane_items ( form , type ) {
 	for ( var i = 0 ; i < lanes.length ; i++ ) {
-		var name = lanes[i].match ( /^[^\.]+/ ) ;
+		var name ;
+		var n ;
+		var u = lanes[i].split('|') ;
+		if ( u.length == 1 ) {
+			name = lanes[i].match ( /^[^\.]+/ ) ;
+			n = name[0].split('_').join(' ') ;
+		} else {
+			name = u[0] ;
+			name = name.match ( /^[^\.]+/ ) ;
+			n = u[1] ;
+		}
 		var id = 'id4label_' + name ;
 		var inp = document.createElement ( 'input' ) ;
-		var n = name[0].split('_').join(' ') ;
 		inp.id = id ;
 		inp.type = type ;
 		inp.name = 'chosenlane' ;
@@ -253,7 +262,14 @@ function show_lanes () {
 	h.style.borderBottom = '1px solid black' ;
 	h.appendChild ( document.createTextNode ( 'Lanes' ) ) ;
 	form.appendChild ( h ) ;
-	create_lane_items ( form , 'radio' ) ;
+	var lanelist = document.createElement ( 'div' ) ;
+	lanelist.id = "lanelist" ;
+	lanelist.style.fontSize = "8pt" ;
+	lanelist.style.maxHeight = "620px" ;
+	lanelist.style.overflowY = 'auto' ;
+	
+	create_lane_items ( lanelist , 'radio' ) ;
+	form.appendChild ( lanelist ) ;
 	create_toggle_button ( form ) ;
 }
 
