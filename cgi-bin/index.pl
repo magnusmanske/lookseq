@@ -8,6 +8,7 @@ BEGIN { push @INC, "."; }
 
 use strict;
 use warnings ;
+use DBI ;
 use CGI;
 use CGI::Carp qw(fatalsToBrowser);
 use File::Basename;
@@ -29,9 +30,28 @@ sub prepare_myscript {
 	$myscript .= "var current_lane = '' ;\n" ;
 	$myscript .= "var lanes = new Array () ;\n" ;
 	
+	my %lanes ;
 	if ( $use_mysql ) {
-		foreach ( @mysql_dbs ) {
-			$myscript .= "lanes.push ( \"$_\" ) ;\n" ;
+		foreach my $db ( @mysql_dbs ) {
+			my $dbh = DBI->connect("DBI:mysql:database=$db;host=$mysql_server;port=$mysql_port", $mysql_user, $mysql_password, {'PrintError'=>0});
+			if ( $dbh ) {
+				my $sth = $dbh->prepare("SELECT * FROM meta WHERE the_key='name'");
+				$sth->execute();
+				my $name ;
+				while (my $ref = $sth->fetchrow_hashref()) {
+					$name = $ref->{'value'} ;
+				}
+				if ( defined $name ) {
+					$lanes{$name} = "lanes.push ( \"$db|$name\" ) ;\n" ;
+					#$myscript .= "lanes.push ( \"$db|$name\" ) ;\n" ;
+				} else {
+					$lanes{$db} = "lanes.push ( \"$db\" ) ;\n" ;
+					#$myscript .= "lanes.push ( \"$db\" ) ;\n" ;
+				}
+			} else {
+				$lanes{$db} = "lanes.push ( \"$db\" ) ;\n" ;
+				#$myscript .= "lanes.push ( \"$db\" ) ;\n" ;
+			}
 		}
 	} else {
 		opendir(DIR, $datapath) || die "can't opendir $datapath: $!";
@@ -40,8 +60,12 @@ sub prepare_myscript {
 		foreach ( sort @dbs ) {
 			next if $_ eq $annotation_file ;
 			next if $_ eq $snp_file ;
-			$myscript .= "lanes.push ( \"$_\" ) ;\n" ;
+			$lanes{$_} = "lanes.push ( \"$_\" ) ;\n" ;
+			#$myscript .= "lanes.push ( \"$_\" ) ;\n" ;
 		}
+	}
+	foreach ( sort keys %lanes ) {
+		$myscript .= $lanes{$_} ;
 	}
 	
 	my $width = $cgi->param('width') || 1024 ;
@@ -104,6 +128,7 @@ sub main {
 		$cgi = new CGI ;
 	}
 
+	
 	$language = lc ( $cgi->param('display') || 'en' ) ;
 	$language =~ s/[^a-z]//g ;
 	
@@ -148,7 +173,8 @@ sub main {
 		$out =~ s/$key/$value/gi ;
 	}
 	
-	print $out ;
+	print "$out" ;
+#	print "!$htmlpath!" ;# print $sw->footer() ; exit ( 0 ) ;
 
 	if ( $use_sanger_layout ) {
 		print $sw->footer() ;
