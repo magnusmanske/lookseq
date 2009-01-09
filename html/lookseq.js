@@ -403,6 +403,7 @@ function update_image () {
 	display += document.getElementById('display_inversions_ext').checked ? 'inversions_ext|' : '' ;
 	display += document.getElementById('display_pair_links').checked ? 'pairlinks|' : '' ;
 	display += document.getElementById('display_known_snps').checked ? 'potsnps|' : '' ;
+	display += document.getElementById('display_uniqueness').checked ? 'uniqueness|' : '' ;
 	
 	document.getElementById('annotation_image').style.display = show_annotation ? 'block' : 'none' ;
 	document.getElementById('gc_image').style.display = show_gc ? 'block' : 'none' ;
@@ -793,6 +794,7 @@ function initialize_display () {
 	document.getElementById('display_inversions_ext').checked	= b['inversions_ext'] ? true : false ;
 	document.getElementById('display_pair_links').checked	= b['pairlinks'] ? true : false ;
 	document.getElementById('display_known_snps').checked	= b['potsnps'] ? true : false ;
+	document.getElementById('display_uniqueness').checked	= b['uniqueness'] ? true : false ;
 	document.getElementById('display_annotation').checked	= b['annotation'] ? true : false ;
 	document.getElementById('display_gc').checked			= b['gc'] ? true : false ;
 	document.getElementById('display_coverage').checked		= b['coverage'] ? true : false ;

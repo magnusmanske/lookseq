@@ -39,6 +39,7 @@ my $display_single = $display =~ m/\|single\|/ ;
 my $display_pair_links = $display =~ m/\|pairlinks\|/ ;
 my $display_pot_snps = $display =~ m/\|potsnps\|/ ;
 my $display_noscale = $display =~ m/\|noscale\|/ ;
+my $display_uniqueness = $display =~ m/\|uniqueness\|/ ;
 my $display_inline_annotation = 1 ; # FIXME
 
 $display_inversions_ext = 0 unless $display_inversions ;
@@ -319,6 +320,7 @@ sub get_chromosome_from_genome_file {
 sub get_chromosome_part {
 	my ( $file , $chromosome , $from , $to ) = @_ ;
 	my $s = get_chromosome_from_genome_file ( $file , $chromosome ) ;
+	return $s if $s eq '' ;
 	$s = substr $s , $from - 1 , $to - $from + 1 ;
 	return $s ;
 }
@@ -968,6 +970,19 @@ sub dump_image_indelview {
 		}
 	}
 	
+	# Uniqueness
+	if ( $display_uniqueness ) {
+		my $u = get_chromosome_part ( $uniqueness_file , $chromosome , $from , $to ) ;
+#		print $cgi->header(-type=>'text/plain',-expires=>'-1s'); print $u ; exit ;
+		my $box = ( $width / $ft ) > 1 ;
+		foreach my $p ( 0 .. length ( $u ) - 1 ) {
+			my $y = int ( substr ( $u , $p , 1 ) ) ;
+			my $x = $width * $p / $ft ;
+			$im->line ( $x , $height , $x , $height - $y * 2 , $red ) unless $box ;
+			$im->filledRectangle ( $x , $height - $y * 2 , $width * ( $p + 1 ) / $ft , $height , $red ) if $box ;
+		}
+	}
+
 	# SNPs
 	foreach my $current_db ( 0 .. $number_of_databases - 1 ) {
 		my $smr = $all_smr[$current_db] ;
@@ -989,8 +1004,8 @@ sub dump_image_indelview {
 				draw_indel_snps ( $im , $seq2 , $y , $p2 , $ft , $text_mode , $red ) if $seq2 ;
 			}
 		}
-	}	
-
+	}
+	
 	draw_h_axis ( $im , $black ) ;
 	
 	# Vertical axis
