@@ -34,6 +34,7 @@ opt_lp	link pairs
 opt_ks	known SNPs
 opt_ann	annotation
 opt_gc	%GC
+opt_un	non-uniqueness
 
 legend_title	Legend :
 leg_indel	Paired reads :

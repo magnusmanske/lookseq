@@ -12,7 +12,7 @@ use strict ;
 use AutoLoader qw(AUTOLOAD);
 our @ISA = qw(Exporter);
 our @EXPORT = qw( 
-	$datapath $genome_file $webroot $docroot $htmlpath $use_sanger_layout $tooltitle $cgi_path $annotation_file $snp_file $robots_flag
+	$datapath $genome_file $webroot $docroot $htmlpath $use_sanger_layout $tooltitle $cgi_path $annotation_file $snp_file $robots_flag $use_db_index_cutoff $uniqueness_file
 	$use_mysql $mysql_server $mysql_port $mysql_user $mysql_password @mysql_dbs
 );
 
@@ -33,6 +33,9 @@ our $cgi_path = 'http://intwebdev.sanger.ac.uk/cgi-bin/teams/team112/lookseq' ;
 
 # The file name of the reference sequence in FASTA format. The file must be in the $datapath directory
 our $genome_file = '3D7_pm.fa' ;
+
+# The file name of the uniqueness (like FASTA, but each "base" is a digit 0-9, with 0=unique and 9=uh-oh). The file must be in the $datapath directory
+our $uniqueness_file = '3D7_pm.fastu' ;
 
 # Internal index usage cutoff; leave unless you know what you're doing!
 our $use_db_index_cutoff = 25000 ;
