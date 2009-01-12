@@ -136,12 +136,14 @@ foreach ( @databases ) {
 	
 		my $dbfile = "$datapath/$_.sqlite";
 		next unless -e $dbfile ;
-		my $dbh = DBI->connect(
+		$dbh = DBI->connect(
 		    "dbi:SQLite:dbname=$dbfile", # DSN: dbi, driver, database file
 		    "",                          # no user
 		    "",                          # no password
 		    { RaiseError => 1 },         # complain if something goes wrong
 		) or die "ERROR\n".$DBI::errstr;
+#		print $cgi->header(-type=>'text/plain',-expires=>'-1s'); # For debugging output
+#		print $dbfile ;
 	}
 
 	# Check chromosomes
