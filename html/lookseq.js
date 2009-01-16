@@ -260,13 +260,14 @@ function show_lanes () {
 	h.id = 'lanes_title' ;
 	h.style.fontWeight = 'bold' ;
 	h.style.borderBottom = '1px solid black' ;
-	h.appendChild ( document.createTextNode ( 'Lanes' ) ) ;
+	h.appendChild ( document.createTextNode ( i18n['lanes_title'] ) ) ;
 	form.appendChild ( h ) ;
 	var lanelist = document.createElement ( 'div' ) ;
 	lanelist.id = "lanelist" ;
 	lanelist.style.fontSize = "8pt" ;
 	lanelist.style.maxHeight = "620px" ;
-	lanelist.style.overflowY = 'auto' ;
+	lanelist.style.overflowY = 'scroll' ;
+	lanelist.style.width = '100%' ;
 	
 	create_lane_items ( lanelist , 'radio' ) ;
 	form.appendChild ( lanelist ) ;
@@ -304,7 +305,7 @@ function toggle_lanes_radio_checkbox () {
 	}
 
 	var b = document.getElementById ( 'button_single_multi' ) ;
-	b.value = newstate == 'radio' ? 'Multiple lanes' : 'Single lane' ;
+	b.value = newstate == 'radio' ? i18n['button_multiple_lanes'] : i18n['button_single_lane'] ;
 	document.getElementById('msg_update_manually').style.display = 'none' ;
 	if ( firstid ) {
 		document.getElementById(firstid).checked = true ;
@@ -983,6 +984,7 @@ function white_wizard_cancel () {
 function init () {
 	document.onmousedown = selectmouse ;
 	document.onmouseup = release_drag ;
+	setOpacity ( document.getElementById('lanes_container') , 90 ) ;
 	if ( window.initialize_organism ) initialize_organism () ;
 	initalize_chromosomes () ;
 	initialize_display () ;
@@ -1194,4 +1196,14 @@ function release_drag () {
 	document.getElementById('chr_from').value = new_from ;
 	document.getElementById('chr_to').value = new_to ;
 	update_image () ;
+}
+
+function togglesidebar() {
+	var state = document.getElementById('lanes').style.display ;
+	if ( state == 'none' ) {
+		document.getElementById('lanes').style.display = 'block' ;
+	} else {
+		document.getElementById('lanes').style.display = 'none' ;
+	}
+	return false ;
 }

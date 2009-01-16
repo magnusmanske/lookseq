@@ -16,6 +16,8 @@ button_zoom_50kb	50kb
 button_zoom_full_chromosome	Full chromosome
 button_search	Search
 button_multiple_lanes	Multiple lanes
+button_single_lane	Single lane
+lanes_title	Samples
 
 from	from
 to	to
