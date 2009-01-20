@@ -689,16 +689,24 @@ sub add_pileup {
 #________________________________________________________________________________________________________________________________________________
 
 sub add_coverage {
-	my ( $r_reads , $reflen , $rl ) = @_ ;
+	my ( $r_reads , $reflen , $single ) = @_ ;
 	
-	my ( $start , $end ) ;
+	my ( $start , $end , $rl , $le ) ;
 	foreach my $read ( @{$r_reads} ) {
+		$le = scalar ( @{$read} ) - 1 ;
+		if ( $single ) {
+			$rl = $read->[$rl] ;
+		} else {
+			$rl = $read->[$rl-1] ;
+		}
+		
 		$start = $read->[1] - $from ;
 		$end = $start + $rl - 1 ;
 		$start = 1 if $start < 1 ;
 		$coverage[$_]++ foreach ( $start .. $end ) ;
 		
-		next if $read->[2] < 0 ;
+		next if $single ;
+		$rl = $read->[$rl] ;
 		$start = $read->[2] - $from ;
 		$end = $start + $rl - 1 ;
 		$start = 1 if $start < 1 ;
@@ -735,10 +743,10 @@ sub dump_image_coverageview {
 		
 		# Fix single reads
 		$sin->[$_]->[2] = -1000 foreach ( 0 .. @$sin ) ;
-		add_coverage ( $smr , $ft , $rl ) ;
-		add_coverage ( $pmr , $ft , $rl ) ;
-		add_coverage ( $sin , $ft , $rl ) ;
-		add_coverage ( $inv , $ft , $rl ) ;
+		add_coverage ( $smr , $ft , 0 ) ;
+		add_coverage ( $pmr , $ft , 0 ) ;
+		add_coverage ( $sin , $ft , 1 ) ;
+		add_coverage ( $inv , $ft , 0 ) ;
 	}
 
 	$height = 0 ;
