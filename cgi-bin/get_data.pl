@@ -48,6 +48,8 @@ $display_inversions_ext = 0 unless $display_inversions ;
 $from =~ s/\D//g ;
 $to =~ s/\D//g ;
 $chromosome =~ s/[^A-Za-z0-9\-_\.]//g ;
+my $orig_chr = $chromosome ;
+$chromosome = "chr_$chromosome" if $chromosome =~ /^\d/ ;
 
 unless ( $view eq 'annotation' or $view eq 'gc' ) {
 	die "ERROR\nNot a valid lane\n" if $database eq '' ;
@@ -79,6 +81,7 @@ my @inversion_left ;
 my @inversion_right ;
 my @inversion_middle ;
 my $avg_frag_size ;
+my $scale_height = $display_noscale ? 0 : 20 ;
 
 my %iupac = (
 	'A'=>'A',
@@ -298,20 +301,23 @@ sub get_chromosome_from_genome_file {
   my $s = "" ;
   my $lchr = " " ;
   while ( <GENOME> ) { # For each line of input file
-    if ( $_ =~ /^>/ ) { # If it starts with an ">", it indicates the end of a chromosome and the beginnig of a new one...
-      return $s if $lchr eq $chr ;
-      
-      $s = "" ;
-      chomp ;
-      $lchr = substr ( $_ , 1 ) ;
-      $lchr =~ s/^\s+// ;
-      $lchr =~ s/\s+$// ;
-      $chr = $lchr if $chr eq "" ;
+	if ( $_ =~ /^>/ ) { # If it starts with an ">", it indicates the end of a chromosome and the beginnig of a new one...
+		return $s if $lchr eq $chr ;
 
-    } else { # Otherwise, DNA
-      chomp ;
-      $s .= uc $_ ;
-    }
+		$s = "" ;
+		chomp ;
+		$lchr = substr ( $_ , 1 ) ;
+		$lchr =~ s/^\s+// ;
+		$lchr =~ s/\s+$// ;
+		$lchr =~ /^([\S+]+)/ ;
+		$lchr = $1 ;
+		$lchr =~ s/[^A-Za-z0-9]/_/g ;
+		$chr = $lchr if $chr eq "" ;
+
+	} else { # Otherwise, DNA
+		chomp ;
+		$s .= uc $_ ;
+	}
   }
   
   return $s if $lchr eq $chr ;
@@ -397,7 +403,7 @@ sub dump_image_pileupview {
 	my @btype ;
 	my $ft = $to - $from + 1 ;
 
-	$refseq = get_chromosome_part ( $genome_file , $chromosome , $from , $to ) ;
+	$refseq = get_chromosome_part ( $genome_file , $orig_chr , $from , $to ) ;
 	
 #	print $cgi->header(-type=>'text/plain',-expires=>'-1s') ;
 	foreach my $current_db ( 0 .. $#all_meta ) {
@@ -753,7 +759,7 @@ sub dump_image_coverageview {
 	foreach ( @coverage ) {
 		$height = $_ if $_ > $height ;
 	}
-	my $scale_height = $display_noscale ? 0 : 20 ;
+#	$scale_height = $display_noscale ? 0 : 20 ;
 	$height += $scale_height ; # Scale
 
 	my $im = new GD::Image ( $width , $height ) ;
@@ -982,7 +988,7 @@ sub dump_image_indelview {
 	
 	# Uniqueness
 	if ( $display_uniqueness ) {
-		my $u = get_chromosome_part ( $uniqueness_file , $chromosome , $from , $to ) ;
+		my $u = get_chromosome_part ( $uniqueness_file , $orig_chr , $from , $to ) ;
 #		print $cgi->header(-type=>'text/plain',-expires=>'-1s'); print $u ; exit ;
 		my $box = ( $width / $ft ) > 1 ;
 		foreach my $p ( 0 .. length ( $u ) - 1 ) {
@@ -1472,7 +1478,7 @@ sub dump_image_gc {
 	my $from2 = $from - $range ;
 	my $to2 = $to + $range ;
 	$from2 = 1 if $from2 < 1 ;
-	$refseq = get_chromosome_part ( $genome_file , $chromosome , $from2 , $to2 ) ;
+	$refseq = get_chromosome_part ( $genome_file , $orig_chr , $from2 , $to2 ) ;
 
 	my $ft = $to - $from + 1 ;
 
