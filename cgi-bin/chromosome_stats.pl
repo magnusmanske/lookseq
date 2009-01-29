@@ -30,6 +30,9 @@ sub get_chromosomes_from_genome_file {
 			$lchr = substr ( $_ , 1 ) ;
 			$lchr =~ s/^\s+// ;
 			$lchr =~ s/\s+$// ;
+			$lchr =~ /^([\S+]+)/ ;
+			$lchr = $1 ;
+			$lchr =~ s/[^A-Za-z0-9]/_/g ;
 		} else { # Otherwise, DNA
 			chomp ;
 			$s .= uc $_ ;
