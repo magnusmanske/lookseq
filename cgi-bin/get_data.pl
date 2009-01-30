@@ -116,7 +116,9 @@ if ( $display_pot_snps and defined  $snp_file ) {
 
 	my $table = $chromosome . '_snps' ;
 	my $snps = [] ;
-	eval { $snps = $dbh->selectall_arrayref ( "SELECT pos,ref,alt FROM $table WHERE pos BETWEEN $from and $to" ) } ;
+	my $where ;
+	$where = "WHERE pos BETWEEN $from AND $to" if $to - $from < 10000 ;
+	eval { $snps = $dbh->selectall_arrayref ( "SELECT pos,ref,alt FROM $table $where" ) } ;
 	foreach ( @{$snps} ) {
 		$known_snps[$_->[0]-$from] = $_->[1] . $_->[2] ;
 	}
@@ -1263,22 +1265,24 @@ sub draw_h_axis {
 	if ( 0 < scalar @known_snps ) {
 		$known_snp_color = $im->colorAllocate ( 150 , 150 , 150 ) unless defined $known_snp_color ;
 		my $show_text = $ft < 300 ? 1 : 0 ;
+		my $last_x = -1 ;
 		foreach ( 0 .. $#known_snps ) {
 			next unless defined $known_snps[$_] ;
-			my $pos = $from + $_ ;
-			my $x = ( $pos - $from ) * $width / $ft + 2 ;
-			if ( $show_text ) {
-				my $ch = substr ( $known_snps[$_] , 1 , 1 ) ;
-				if ( defined $refseq ) {
-					$ch = $iupac{$ch} ;
-					my $orig = substr $refseq , $_ , 1 ;
-					$ch =~ s/$orig//g ;
-					$ch = $iupac_reverse{$ch} ;
-				}
-				$im->string ( gdSmallFont , $x - 2 , $height - 21 , $ch , $known_snp_color ) ;
-			} else {
+			my $x = $_ * $width / $ft + 2 ;
+			unless ( $show_text ) {
+				next if $x == $last_x ;
 				$im->line ( $x , $height - 19 , $x , $height - 12 , $known_snp_color ) ;
+				$last_x = $x ;
+				next ;
 			}
+			my $ch = substr ( $known_snps[$_] , 1 , 1 ) ;
+			if ( defined $refseq ) {
+				$ch = $iupac{$ch} ;
+				my $orig = substr $refseq , $_ , 1 ;
+				$ch =~ s/$orig//g ;
+				$ch = $iupac_reverse{$ch} ;
+			}
+			$im->string ( gdSmallFont , $x - 2 , $height - 21 , $ch , $known_snp_color ) ;
 		}
 	}
 
