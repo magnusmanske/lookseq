@@ -1,4 +1,4 @@
-#!/usr/local/bin/perl -wT
+#!/usr/local/bin/perl -T
 #########
 # Author:     Magnus Manske (mm6@sanger.ac.uk)
 # Group:      Team 112
@@ -18,7 +18,9 @@ my $cgi = new CGI;
 my $time0 = [gettimeofday()];
 my $debug_output = 0 ;
 $debug_output = $cgi->param('debug') if defined $cgi->param('debug') ;
-
+if ( $debug_output ) {
+	use warnings ;
+}
 
 # Parameters
 my $output = $cgi->param('output') || 'text' ;
@@ -30,6 +32,32 @@ my $chromosome = $cgi->param('chr') ;
 my $width = $cgi->param('width') || 1024 ;
 my $height = $cgi->param('height') || 512 ;
 my $display = $cgi->param('display') || '|perfect|snps|inversions|' ;
+
+
+# Sanger cache - others, ignore
+my ( $sanger_web , $sanger_cache_db , $sanger_cache_hours , $sanger_cache_key ) ;
+if ( $use_sanger_cache and ( $to - $from > 500000 ) ) { # Only for large displays
+	use SangerPaths qw(core);
+	use SangerWeb;
+	$sanger_web = SangerWeb->new();
+	$sanger_cache_db = $sanger_web->dbstore();
+	$sanger_cache_hours = 24 * 10 ;
+	$sanger_cache_key = "LookSeq/" . CGI::url(-query=>1) ;
+
+	my $data = $sanger_cache_db->get ( $sanger_cache_key ) ;
+	
+	if ( 0 < length $data ) {
+		if ( $output eq 'text' ) {
+			print $sanger_web->cgi()->header(-type=>'text/plain',-expires=>'-1s');
+		} else {
+			print $sanger_web->cgi()->header(-type=>'image/png',-expires=>'-1s');
+			binmode STDOUT;
+		}
+		print $data ;
+		exit ;
+	}
+
+}
 
 my $display_perfect = $display =~ m/\|perfect\|/ ;
 my $display_snps = $display =~ m/\|snps\|/ ;
@@ -117,9 +145,10 @@ if ( $display_pot_snps and defined  $snp_file ) {
 	my $table = $chromosome . '_snps' ;
 	my $snps = [] ;
 	my $where ;
-	$where = "WHERE pos BETWEEN $from AND $to" if $to - $from < 10000 ;
+	$where = "WHERE pos BETWEEN $from AND $to" if $to - $from < 500000 ;
 	eval { $snps = $dbh->selectall_arrayref ( "SELECT pos,ref,alt FROM $table $where" ) } ;
 	foreach ( @{$snps} ) {
+		next if $_->[0] < $from ;
 		$known_snps[$_->[0]-$from] = $_->[1] . $_->[2] ;
 	}
 }
@@ -596,9 +625,7 @@ sub dump_image_pileupview {
 	my $elapsed = tv_interval ( $time0 );
 	$im->string ( gdSmallFont , 5 , 0 , "Rendering time : $elapsed, $total_reads total reads" , $black ) if $debug_output ;
 
-	print $cgi->header(-type=>'image/png',-expires=>'-1s');
-	binmode STDOUT;
-	print $im->png () ;
+	write_png ( $im ) ;
 }
 
 sub pile2bands {
@@ -808,9 +835,7 @@ sub dump_image_coverageview {
 
 	show_debugging_output ( $im , $black ) ;
 
-	print $cgi->header(-type=>'image/png',-expires=>'-1s');
-	binmode STDOUT;
-	print $im->png () ;
+	write_png ( $im ) ;
 }
 
 
@@ -1039,9 +1064,7 @@ sub dump_image_indelview {
 
 	show_debugging_output ( $im , $red ) ;
 
-	print $cgi->header(-type=>'image/png',-expires=>'-1s');
-	binmode STDOUT;
-	print $im->png () ;
+	write_png ( $im ) ;
 }
 
 sub draw_inline_annotation {
@@ -1472,9 +1495,7 @@ sub dump_image_annotation {
 		return ;
 	}
 
-	print $cgi->header(-type=>'image/png',-expires=>'-1s');
-	binmode STDOUT;
-	print $im->png () ;
+	write_png ( $im ) ;
 }
 
 sub dump_image_gc {
@@ -1546,9 +1567,7 @@ sub dump_image_gc {
 	my $elapsed = tv_interval ( $time0 );
 	$im->string ( gdSmallFont , 5 , 0 , "Rendering time : $elapsed, $total_reads total reads" , $red ) if $debug_output ;
 
-	print $cgi->header(-type=>'image/png',-expires=>'-1s');
-	binmode STDOUT;
-	print $im->png () ;
+	write_png ( $im ) ;
 }
 
 sub in_array {
@@ -1557,6 +1576,17 @@ sub in_array {
         return 1 if $value eq $search_for;
     }
     return 0;
+}
+
+sub write_png {
+	my ( $im ) = @_ ;
+	print $cgi->header(-type=>'image/png',-expires=>'-1s');
+	binmode STDOUT;
+	my $png = $im->png () ;
+	print $png ;
+	if ( $use_sanger_cache ) {
+		$sanger_cache_db->set ( $png , $sanger_cache_key , $sanger_cache_hours ) ;
+	}
 }
 
 # if ( $debug_output ) {
