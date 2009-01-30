@@ -12,7 +12,7 @@ use strict ;
 use AutoLoader qw(AUTOLOAD);
 our @ISA = qw(Exporter);
 our @EXPORT = qw( 
-	$datapath $genome_file $webroot $docroot $htmlpath $use_sanger_layout $tooltitle $cgi_path $annotation_file $snp_file $robots_flag $use_db_index_cutoff $uniqueness_file
+	$datapath $genome_file $webroot $docroot $htmlpath $use_sanger_layout $tooltitle $cgi_path $annotation_file $snp_file $robots_flag $use_db_index_cutoff $uniqueness_file $use_sanger_cache
 	$use_mysql $mysql_server $mysql_port $mysql_user $mysql_password @mysql_dbs
 );
 
@@ -59,7 +59,8 @@ our $robots_flag = 'index, follow' ;
 # Don't use index for database query if region is larger than this
 $use_db_index_cutoff = 20000 ;
 
-# Sanger-specific flag; don't change unless you know what you're doing
+# Sanger-specific flags; don't change unless you know what you're doing
 our $use_sanger_layout = 0 ;
+our $use_sanger_cache = 1 ;
 
 1 ;
