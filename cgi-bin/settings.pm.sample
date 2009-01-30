@@ -61,6 +61,6 @@ $use_db_index_cutoff = 20000 ;
 
 # Sanger-specific flags; don't change unless you know what you're doing
 our $use_sanger_layout = 0 ;
-our $use_sanger_cache = 1 ;
+our $use_sanger_cache = 0 ;
 
 1 ;
