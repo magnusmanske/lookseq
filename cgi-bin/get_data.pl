@@ -33,6 +33,8 @@ my $width = $cgi->param('width') || 1024 ;
 my $height = $cgi->param('height') || 512 ;
 my $display = $cgi->param('display') || '|perfect|snps|inversions|' ;
 
+$from =~ /(\d+)/ ; $from = $1 ;
+$to =~ /(\d+)/ ; $to = $1 ;
 
 # Sanger cache - others, ignore
 my ( $sanger_web , $sanger_cache_db , $sanger_cache_hours , $sanger_cache_key ) ;
@@ -100,6 +102,7 @@ my $show_chars ; # For pileup; global var easier that passing it through lots'o'
 my $do_coverage = $view eq 'coverage' ? 1 : 0 ;
 my @coverage ;
 my $refseq ;
+my $reflength ;
 my %meta ;
 my @known_snps ;
 my $known_snp_color ;
@@ -110,6 +113,22 @@ my @inversion_right ;
 my @inversion_middle ;
 my $avg_frag_size ;
 my $scale_height = $display_noscale ? 0 : 20 ;
+my $max_dist ;
+my $ft ;
+
+# SAM/BAM variables
+my $using_bam = 0 ;
+my $cmd_samtools = "$execpath/samtools" ;
+my $sam_show_read_arrows = 0 ;
+my $sam_show_read_quality = 0 ;
+my %sam_reads ;
+my ( @sam_single , @sam_perfect , @sam_snps , @sam_inversions , @sam_capillary ) ;
+my $sam_max_found_fragment = 0 ;
+my $im ;
+my ( $sam_white , $sam_black , $sam_col_single_read , $sam_col_mismatch , $sam_col_matching_read , $sam_col_inversion , $sam_col_read_pair_connection ) ;
+my ( $sam_col_read_pair_quality , $sam_col_single_read_quality ) ;
+
+
 
 my %iupac = (
 	'A'=>'A',
@@ -155,6 +174,14 @@ if ( $display_pot_snps and defined  $snp_file ) {
 
 my @databases = split ( ',' , $database ) ;
 foreach ( @databases ) {
+
+	if ( $_ =~ /.bam$/ ) {
+		$_ =~ /([a-zA-Z0-9_\-\.]+)/ ;
+		sam_read_data ( "$datapath/$1" ) ;
+		$using_bam = 1 ;
+		next ;
+	}
+
 	my $dbh ;
 
 	if ( $use_mysql ) {
@@ -297,6 +324,12 @@ foreach ( @databases ) {
 	push @all_cig , $cig ;
 	push @all_ann , $ann ;
 	push @all_meta , \%meta ;
+}
+
+if ( $using_bam ) {
+	$refseq = get_chromosome_part ( $genome_file , $orig_chr , $from , $to ) ;
+	$reflength = length $refseq ;
+	&sam_bin ;
 }
 
 
@@ -843,11 +876,11 @@ sub dump_image_coverageview {
 
 
 sub dump_image_indelview {
-	my $ft = $to - $from + 1 ;
+	$ft = $to - $from + 1 ;
 	my $text_mode = $width / $ft > 5 ;
-	my $max_dist = 1 ; # Dummy value
-	
-	my $im = new GD::Image ( $width , $height ) ;
+	$max_dist = 1 ; # Dummy value
+
+	$im = new GD::Image ( $width , $height ) ;
 	my $white = $im->colorAllocate ( 255 , 255 , 255 ) ;
 	my $black = $im->colorAllocate ( 0 , 0 , 0 ) ;
 	my $blue = $im->colorAllocate ( 0 , 0 , 255 ) ;
@@ -861,6 +894,8 @@ sub dump_image_indelview {
 	my $inversion_middle_color = $im->colorAllocate ( 0x99 , 0xD2 , 0x58 ) ; # 99D258
 	my $orange = $im->colorAllocate ( 0xFF , 0xAA , 0x00 ) ;
 	my $grey = $im->colorAllocate ( 200 , 200 , 200 ) ;
+
+
 	
 	my @ann_color = ( $black , $blue , $red , $single_color , $orange , $inversion_right_color, $inversion_middle_color , $variance_color  , $inversion_left_color , $inversion_color ) ;
 	
@@ -878,6 +913,25 @@ sub dump_image_indelview {
 		$im->filledRectangle (	0 , $height - ( $meta{'fragment'}+$meta{'variance'} ) * $height / $max_dist ,
 								$width , $height - ( $meta{'fragment'}-$meta{'variance'} ) * $height / $max_dist , $variance_color ) ;
 	}
+
+	if ( $using_bam ) {
+		$sam_white = $white ;
+		$sam_black = $black ;
+		$sam_col_single_read = $single_color ;
+		$sam_col_mismatch = $red ;
+		$sam_col_matching_read = $blue ;
+		$sam_col_inversion = $inversion_color ;
+		$sam_col_read_pair_connection = $grey ;
+		$sam_col_read_pair_quality = $orange ;
+		$sam_col_single_read_quality = $orange ;
+		if ( $max_dist <= 1 ) {
+			$max_dist = $sam_max_found_fragment ;
+			$max_dist = $height - $scale_height if $max_dist < $height - $scale_height ;
+			$max_dist = $height ; # AAARGH DUMMY FIXME !!!!!
+		}
+#		&sam_paint ;
+	}
+
 	
 	# Single matches
 	if ( $display_single ) {
@@ -906,6 +960,10 @@ sub dump_image_indelview {
 				$im->filledRectangle ( $_ , 0 , $_+$stacklen[$_] , $stack[$_] , $single_color ) if $stacklen[$_] > 1 ;
 			}
 		}
+		if ($using_bam ) {
+			sam_paint_single_short_reads ( \@sam_single , $sam_col_single_read ) ;
+			sam_paint_short_single_reads_quality ( \@sam_single , $sam_col_single_read_quality ) ;
+		}
 	}
 
 	# Grey lines between link pairs
@@ -919,6 +977,18 @@ sub dump_image_indelview {
 			draw_indel_pair_links ( $im , $all_smr[$current_db] , $grey , $max_dist , $rl , $ft , $len ) if $display_snps ;
 			draw_indel_pair_links ( $im , $all_inv[$current_db] , $grey , $max_dist , $rl , $ft , $len ) if $display_inversions ;
 		}
+		if ( $using_bam ) {
+			sam_paint_short_read_pair_connections ( \@sam_perfect , $sam_col_read_pair_connection ) ;
+			sam_paint_short_read_pair_connections ( \@sam_snps , $sam_col_read_pair_connection ) ;
+			sam_paint_short_read_pair_connections ( \@sam_inversions , $sam_col_read_pair_connection ) ;
+		}
+	}
+
+	# Read quality (BAM only)
+	if ( $using_bam and $sam_show_read_quality ) {
+		sam_paint_short_read_pairs_quality ( \@sam_perfect , $sam_col_read_pair_quality ) ;
+		sam_paint_short_read_pairs_quality ( \@sam_snps , $sam_col_read_pair_quality ) ;
+		sam_paint_short_read_pairs_quality ( \@sam_inversions , $sam_col_read_pair_quality ) ;
 	}
 
 	# Inversion boundaries
@@ -962,6 +1032,12 @@ sub dump_image_indelview {
 		draw_indel_matches ( $im , $all_smr[$current_db] , $blue , $max_dist , $rl , $ft , $len ) if $display_snps ;
 		draw_indel_matches ( $im , $all_inv[$current_db] , $inversion_color , $max_dist , $rl , $ft , $len , 0 , $meta{'dbversion'} > 2 ) if $display_inversions ;
 	}
+	if ( $using_bam ) {
+		sam_paint_short_read_pairs ( \@sam_perfect , $sam_col_matching_read , 0 ) ;
+		sam_paint_short_read_pairs ( \@sam_snps , $sam_col_matching_read , 1 ) ;
+		sam_paint_short_read_pairs ( \@sam_inversions , $sam_col_inversion , 1 ) ;
+	}
+
 	
 	# Moving annotation average
 	if ( 0 < scalar @anno_sum ) {
@@ -1588,6 +1664,283 @@ sub write_png {
 		$sanger_cache_db->set ( $png , $sanger_cache_key , $sanger_cache_hours ) ;
 	}
 }
+
+
+
+#______________________________________________________________________________________
+
+
+# METHODS
+
+# Paint
+sub sam_paint {
+#	$| = 1;	print $cgi->header(-type=>'text/plain',-expires=>'-1s'); # For debugging output
+#	print "So far...\n" ;
+	if ( $display_pair_links ) {
+		sam_paint_short_read_pair_connections ( \@sam_perfect , $sam_col_read_pair_connection ) ;
+		sam_paint_short_read_pair_connections ( \@sam_snps , $sam_col_read_pair_connection ) ;
+		sam_paint_short_read_pair_connections ( \@sam_inversions , $sam_col_read_pair_connection ) ;
+	}
+
+	if ( $sam_show_read_quality ) {
+		sam_paint_short_read_pairs_quality ( \@sam_perfect , $sam_col_read_pair_quality ) ;
+		sam_paint_short_read_pairs_quality ( \@sam_snps , $sam_col_read_pair_quality ) ;
+		sam_paint_short_read_pairs_quality ( \@sam_inversions , $sam_col_read_pair_quality ) ;
+		sam_paint_short_single_reads_quality ( \@sam_single , $sam_col_single_read_quality ) if $display_single ;
+	}
+
+	sam_paint_short_read_pairs ( \@sam_perfect , $sam_col_matching_read , 0 ) ;
+	sam_paint_short_read_pairs ( \@sam_snps , $sam_col_matching_read , 1 ) ;
+	sam_paint_short_read_pairs ( \@sam_inversions , $sam_col_inversion , 1 ) ;
+	sam_paint_single_short_reads ( \@sam_single , $sam_col_single_read ) if $display_single ;
+#	print "DONE!" ; exit ;
+}
+
+# Read data in
+sub sam_read_data {
+	my ( $file_bam ) = @_ ;
+	
+	my $from2 = $from - 200 ;
+	my $to2 = $to + 100 ;
+	$from2 = 1 if $from2 < 1 ;
+	
+	$chromosome =~ /([a-zA-Z0-9_.]+)/ ;
+	my $cmd = "$cmd_samtools view $file_bam $1:$from2-$to2" ;
+	
+	# De-tainting $ENV{'PATH'}
+	$ENV{'PATH'} =~ /(.*)/;
+	$ENV{'PATH'} = $1;
+	
+	open PIPE , "$cmd |" ;
+	while ( <PIPE> ) {
+		$_ =~ /^(\S+)\s(.+)+$/ ;
+		my @a = split "\t" , $2 ;
+		next unless $display_single or $a[0] & 0x0002 ; # Don't load single reads unless we display them
+		push @{$sam_reads{$1}} , \@a ;
+	}
+	close PIPE ;
+}
+
+
+# Separate into bins
+sub sam_bin {
+	foreach my $read ( keys %sam_reads ) {
+#		print "$read\n" ;
+		my $r = $sam_reads{$read} ;
+		if ( 2 != scalar @{$r} ) {
+			if ( 1 == scalar @{$r} ) { # Single read
+				sam_check4snps ( $r->[0] ) ;
+				push @sam_single , $read ; # FIXME detect capillary
+			} elsif ( 2 < scalar @{$r} ) {
+				# Multiple alignment, don't display!!!!
+			}
+		} elsif ( $r->[0]->[1] ne $r->[1]->[1] ) { # Two read "halfs", but on different chromosomes
+			print STDERR "Not the same chromosome : $read\n" ;
+		} elsif ( ( $r->[0]->[0] & 0x0010 ) == ( $r->[1]->[0] & 0x0010 ) ) { # Two reads, inversion
+			sam_check4snps ( $r->[0] ) ;
+			sam_check4snps ( $r->[1] ) ;
+			push @sam_inversions , $read if $display_inversions ;
+		} else { # Just two reads
+			my $snps1 = sam_check4snps ( $r->[0] ) ;
+			my $snps2 = sam_check4snps ( $r->[1] ) ;
+			if ( $snps1 + $snps2 == 0 ) {
+				push @sam_perfect , $read if $display_perfect ;
+			} else {
+				push @sam_snps , $read if $display_snps ;
+			}
+			unless ( defined $max_dist ) {
+				my $dist = abs ( $r->[0]->[7] ) ;
+				$sam_max_found_fragment = $dist if $sam_max_found_fragment < $dist ;
+			}
+		}
+	}
+}
+
+
+
+sub sam_check4snps {
+	my ( $r ) = @_ ;
+	my $seq = $r->[8] ;
+	my $pos = $r->[2] ;
+	if ( $pos >= $from ) {
+		if ( $seq eq substr $refseq , $pos - $from , length $seq ) {
+			return 0 ;
+		}
+	}
+
+	my $mismatches = 0 ;
+
+	my $rpos = $pos - $from - 1 ;
+	my $start = 0 ;
+	if ( $rpos < -1 ) {
+		$start = -$rpos ;
+		$rpos = 0 ;
+	}
+	my $end = length ( $seq ) - 1 ;
+	$end-- while ( $rpos + $end - $start >= $reflength ) ;
+	foreach my $spos ( $start .. $end ) {
+		$rpos++ ;
+		if ( substr ( $seq , $spos , 1 )  ne substr ( $refseq , $rpos , 1 ) ) {
+			substr ( $r->[8] , $spos , 1 ) = lc substr ( $seq , $spos , 1 )  ;
+			$mismatches++ ;
+		}
+	}
+
+	return $mismatches ;
+}
+
+sub sam_get_y {
+	my ( $r ) = @_ ;
+	my $y = abs ( $r->[7] ) ;#- length $r->[8] ;
+	$y = ( $height  ) * $y / $max_dist ;
+	$y = $height - $y ;#- $scale_height ;
+	return $y ;
+}
+
+sub sam_paint_short_read_pair_connections {
+	my ( $r , $col ) = @_ ;
+	foreach ( @{$r} ) {
+		my $read = $sam_reads{$_} ;
+		my $y = sam_get_y ( $read->[0] ) ;
+#		my $y = abs ( $read->[0]->[7] ) ;
+#		$y = ( $height - $scale_height ) * $y / $max_dist ;
+#		$y = $height - $scale_height - $y ;
+		my $x1 = $read->[0]->[2] - $from ;
+		my $x2 = $read->[1]->[2] - $from ;
+		$x1 = int ( $x1 * $width / $ft ) ;
+		$x2 = int ( $x2 * $width / $ft ) ;
+#		print "$x1/$y -> $x2/$y | $height | $scale_height | $max_dist\n" ;
+		$im->line ( $x1 , $y , $x2 , $y , $col ) ;
+	}
+}
+
+####
+
+sub sam_get_single_read_height {
+	my ( $r ) = @_ ;
+	my $y = hex ( substr md5_hex ( $r->[9] ) , 0 , 8 ) % ( $height - $scale_height ) ;
+#	my $y = $r->[2] % ( $height - $scale_height ) ;
+	$y = $height - $scale_height - $y ;
+	return $y ;
+}
+
+sub sam_paint_single_short_reads {
+	my ( $r , $col ) = @_ ;
+	foreach ( @{$r} ) {
+		my $r = $sam_reads{$_}->[0] ;
+		my $y = get_single_read_height ( $r ) ;
+		sam_paint_single_short_read ( $r , $col , $y , 1 ) ;
+	}
+}
+
+sub sam_paint_short_single_reads_quality {
+	my ( $r , $col ) = @_ ;
+	foreach ( @{$r} ) {
+		my $r = $sam_reads{$_}->[0] ;
+		my $y = get_single_read_height ( $r ) ;
+		sam_paint_single_short_read_quality ( $r , $y , $col ) ;
+	}
+}
+
+####
+
+sub sam_paint_short_read_pairs_quality {
+	my ( $r , $col ) = @_ ;
+	foreach ( @{$r} ) {
+		sam_paint_short_read_pair_quality ( $sam_reads{$_} , $col ) ;
+	}
+}
+
+sub sam_paint_short_read_pair_quality {
+	my ( $r , $col ) = @_ ;
+	my $y = sam_get_y ( $r->[0] ) ;
+#	my $y = abs ( $r->[0]->[7] ) ;
+#	$y = ( $height - $scale_height ) * $y / $max_dist ;
+#	$y = $height - $scale_height - $y ;
+	sam_paint_single_short_read_quality ( $r->[0] , $y , $col ) ;
+	sam_paint_single_short_read_quality ( $r->[1] , $y , $col ) ;
+}
+
+sub sam_paint_single_short_read_quality {
+	my ( $r , $y , $col ) = @_ ;
+	my $l = length ( $r->[9] ) - 1 ;
+	my ( $lastx , $lasty ) ;
+	foreach ( 0 .. $l ) {
+		my $ch = substr $r->[9] , $_ , 1 ;
+		my $x = int ( ( $r->[2] - $from + $_ ) * $width / $ft ) ;
+		my $qh = 30 - ( ord ( $ch ) - 33 ) ;
+		$im->line ( $lastx , $lasty , $x , $y+$qh , $col ) if defined $lastx ;
+		$lastx = $x ;
+		$lasty = $y + $qh ;
+	}
+}
+
+#______________________________________________________________________________________
+
+
+####
+
+sub sam_paint_short_read_pairs {
+	my ( $r , $col , $draw_snps ) = @_ ;
+	foreach ( @{$r} ) {
+		sam_paint_short_read_pair ( $sam_reads{$_} , $col , $draw_snps ) ;
+	}
+}
+
+sub sam_paint_short_read_pair {
+	my ( $r , $col , $draw_snps ) = @_ ;
+	my $y = sam_get_y ( $r->[0] ) ;
+#	my $y = abs ( $r->[0]->[7] ) ;
+#	$y = ( $height - $scale_height ) * $y / $max_dist ;
+#	$y = $height - $scale_height - $y ;
+	sam_paint_single_short_read ( $r->[0] , $col , $y , $draw_snps ) ;
+	sam_paint_single_short_read ( $r->[1] , $col , $y , $draw_snps ) ;
+}
+
+sub sam_paint_single_short_read {
+	my ( $r , $col , $y , $draw_snps ) = @_ ;
+	my $x1 = $r->[2] - $from ;
+	my $x2 = $x1 + length $r->[8] ;
+	$x1 = int ( $x1 * $width / $ft ) ;
+	$x2 = int ( $x2 * $width / $ft ) ;
+	$im->line ( $x1 , $y , $x2 , $y , $col ) ;
+	
+	if ( $sam_show_read_arrows ) {
+		if ( $r->[0] & 0x0010 ) { # reverse
+			my $xn = int ( $x1 + ( $x2 - $x1 ) / 5 ) ;
+			$im->line ( $x1 , $y , $xn , $y+2 , $col ) if $xn != $x1 ;
+		} else {
+			my $xn = int ( $x2 - ( $x2 - $x1 ) / 5 ) ;
+			$im->line ( $xn , $y-2 , $x2 , $y , $col ) if $xn != $x2 ;
+		}
+	}
+	
+	return unless $draw_snps ;
+	
+	while ( $r->[8] =~ m/[a-z]/g ) {
+		$x1 = int ( ( $r->[2] - $from + pos ( $r->[8] ) - 1  ) * $width / $ft ) ;
+		$im->line ( $x1 , $y-2 , $x1 , $y+2 , $sam_col_mismatch ) ;
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 # if ( $debug_output ) {
 	# print $cgi->header(-type=>'text/plain',-expires=>'-1s'); # For debugging output

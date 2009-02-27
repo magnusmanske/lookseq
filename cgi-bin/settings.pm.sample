@@ -12,12 +12,17 @@ use strict ;
 use AutoLoader qw(AUTOLOAD);
 our @ISA = qw(Exporter);
 our @EXPORT = qw( 
-	$datapath $genome_file $webroot $docroot $htmlpath $use_sanger_layout $tooltitle $cgi_path $annotation_file $snp_file $robots_flag $use_db_index_cutoff $uniqueness_file $use_sanger_cache
+	$execpath $datapath $genome_file $webroot $docroot $htmlpath $tooltitle
+	$cgi_path $annotation_file $snp_file $robots_flag $use_db_index_cutoff $uniqueness_file 
+	$use_sanger_cache $use_sanger_layout
 	$use_mysql $mysql_server $mysql_port $mysql_user $mysql_password @mysql_dbs
 );
 
 # Tool title
 our $tooltitle = 'LookSeq' ;
+
+# The local file path to the CGI files
+our $execpath = "/WWW/INTWEB_docs/cgi-bin/teams/team112/lookseq" ;
 
 # The local file path to the directory containing the data (alignment databases, reference sequence etc.)
 our $datapath = '../../../../data/teams/team112/solexa' ;
