@@ -207,7 +207,9 @@ function create_lane_items ( form , type ) {
 		var n ;
 		var u = lanes[i].split('|') ;
 		if ( u.length == 1 ) {
-			name = lanes[i].match ( /^[^\.]+/ ) ;
+			if ( lanes[i].substr ( lanes[i].length - 4 ) == ".bam" ) name[0] = lanes[i] ;
+			else name = lanes[i].match ( /^[^\.]+/ ) ;
+			
 			n = name[0].split('_').join(' ') ;
 		} else {
 			name = u[0] ;

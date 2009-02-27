@@ -57,6 +57,15 @@ sub prepare_myscript {
 		opendir(DIR, $datapath) || die "can't opendir $datapath: $!";
 	    my @dbs = grep { /\.sqlite$/ } readdir(DIR);
 	    closedir DIR;
+		opendir(DIR, $datapath) || die "can't opendir $datapath: $!";
+	    my @dbs_bam = grep { /\.bam$/ } readdir(DIR);
+	    closedir DIR;
+		
+		push @dbs , @dbs_bam ;
+		
+#		print $cgi->header(-type=>'text/plain',-expires=>'-1s'); # For debugging output
+#		print join "\n" , @dbs ;
+		
 		foreach ( sort @dbs ) {
 			next if $_ eq $annotation_file ;
 			next if $_ eq $snp_file ;
@@ -65,8 +74,11 @@ sub prepare_myscript {
 		}
 	}
 	foreach ( sort keys %lanes ) {
+#		print $lanes{$_} ;
 		$myscript .= $lanes{$_} ;
 	}
+
+#		exit ;
 	
 	my $width = $cgi->param('width') || 1024 ;
 	$myscript .= "var img_width = $width ;\n" ;
