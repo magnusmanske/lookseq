@@ -527,8 +527,22 @@ sub dump_image_pileupview {
 #	exit ;
 	
 	if ( $output eq 'text' ) {
+		my $potseq = ' ' x length ( $refseq ) ;
+		my $altseq = $refseq ;
+		
+		if ( $display_pot_snps ) {
+			foreach ( 0 .. ( $to - $from ) ) {
+				next unless defined $known_snps[$_] ;
+				substr ( $potseq , $_ , 1 ) = substr $known_snps[$_] , 1 , 1 ;
+				substr ( $altseq , $_ , 1 ) = 'N' ;
+			}
+		}
+	
 		print $cgi->header(-type=>'text/plain',-expires=>'-1s');
-		print "$chromosome : $from - $to\n$refseq\n" ;
+		print "$chromosome : $from - $to\n" ;
+		print "$potseq\n" ;
+		print "$refseq\n" ;
+		print "$altseq\n" ;
 		foreach ( @bands ) {
 			print "$_\n" ;
 		}
@@ -1298,13 +1312,13 @@ sub draw_indel_matches {
 		if ( $dir[1] eq '+' ) {
 			$xf = int ( ( $smaller - $from ) * $width / $ft ) ;
 			$xt = int ( ( $smaller - $from + $avg_frag_size ) * $width / $ft + $len ) ;
-			$middle = $smaller + $ofs*3/4 ;
-			$int_var = $ofs/4 ;
+			$middle = $smaller + int ( ( $ofs - $rl + $avg_frag_size ) / 2 )  ;
+			$int_var = abs ( $avg_frag_size - 2 * $rl ) ;
 		}  elsif ( $dir[1] eq '-' ) {
 			$xt = int ( ( $smaller - $from + $ofs ) * $width / $ft ) ;
 			$xf = int ( ( $smaller - $from + $ofs - $avg_frag_size ) * $width / $ft + $len ) ;
-			$middle = $larger - $ofs*3/4 ;
-			$int_var = $ofs/4 ;
+			$middle = $smaller + int ( ( $ofs - $rl + $avg_frag_size ) / 2 )  ;
+			$int_var = abs ( $avg_frag_size - 2 * $rl ) ;
 		} else { next } ;
 		$xf = 0 if $xf < 0 ;
 		if ( '+' eq $dir[1] ) {
