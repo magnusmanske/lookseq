@@ -203,7 +203,7 @@ function is_MSIE () {
 
 function create_lane_items ( form , type ) {
 	for ( var i = 0 ; i < lanes.length ; i++ ) {
-		var name ;
+		var name = new Array() ;
 		var n ;
 		var u = lanes[i].split('|') ;
 		if ( u.length == 1 ) {
