@@ -207,10 +207,13 @@ function create_lane_items ( form , type ) {
 		var n ;
 		var u = lanes[i].split('|') ;
 		if ( u.length == 1 ) {
-			if ( lanes[i].substr ( lanes[i].length - 4 ) == ".bam" ) name[0] = lanes[i] ;
-			else name = lanes[i].match ( /^[^\.]+/ ) ;
+			if ( lanes[i].substr ( lanes[i].length - 4 ) == ".bam" ) {
+				name[0] = lanes[i] ;
+//				name[1] = lanes[i] ;
+			} else name = lanes[i].match ( /^[^\.]+/ ) ;
 			
 			n = name[0].split('_').join(' ') ;
+			name = name[0] ;
 		} else {
 			name = u[0] ;
 			name = name.match ( /^[^\.]+/ ) ;
