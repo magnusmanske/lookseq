@@ -913,6 +913,7 @@ sub dump_image_indelview {
 	
 	my @ann_color = ( $black , $blue , $red , $single_color , $orange , $inversion_right_color, $inversion_middle_color , $variance_color  , $inversion_left_color , $inversion_color ) ;
 	
+	$max_dist = $cgi->param('maxdist') ;
 	if ( $number_of_databases > 0 ) {
 		my %meta = %{$all_meta[0]} ;
 		$max_dist = 0 ;
