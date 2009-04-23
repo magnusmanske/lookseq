@@ -13,6 +13,7 @@ use DBI;
 use GD ;
 use Time::HiRes qw( usleep ualarm gettimeofday tv_interval nanosleep );
 use settings ;
+use Data::Dumper ;
 
 my $cgi = new CGI;
 my $time0 = [gettimeofday()];
@@ -524,7 +525,16 @@ sub dump_image_pileupview {
 		pile2bands ( $all_sin[$current_db] , \@bands , \@btype , $all_meta[$current_db]->{'read_length'} , 1 , 0 , $all_meta[$current_db]->{'fragment'} ) ;
 	}
 	
+	if ( $using_bam ) {
+		$show_chars = $width / $ft > 4 ? 1 : 0 ;
+#	print $cgi->header(-type=>'text/plain',-expires=>'-1s'); 
+		pile2bands_sam ( \@bands , \@btype , 0 , $paired_pileup , \@sam_perfect ) ;
+		pile2bands_sam ( \@bands , \@btype , 0 , $paired_pileup , \@sam_snps ) ;
+		pile2bands_sam ( \@bands , \@btype , 2 , $paired_pileup , \@sam_inversions ) ;
+		pile2bands_sam ( \@bands , \@btype , 1 , $paired_pileup , \@sam_single ) ;
 #	exit ;
+	}
+
 	
 	if ( $output eq 'text' ) {
 		my $potseq = ' ' x length ( $refseq ) ;
@@ -675,6 +685,37 @@ sub dump_image_pileupview {
 	write_png ( $im ) ;
 }
 
+sub pile2bands_sam {
+	my ( $r_bands , $r_btype , $mode , $paired_pileup , $data ) = @_ ;
+	my $single = $mode == 1 ;
+	
+	foreach ( @{$data} ) {
+		my $r = $sam_reads{$_} ;
+		my $from1 = $r->[0]->[2] ;
+		my $from2 = $single ? undef : $r->[1]->[2] ;
+		
+#			my $end = $start + length $r->[8] ;
+		my $rl1 = length $r->[0]->[8] ;
+		my $rl2 = $single ? 0 : length $r->[1]->[8] ;
+		my $dist = $from2 - $from1 + 1 + $rl2 ;
+
+		if ( $paired_pileup and not $single ) {
+			my $between = $from2 - $from1 - $rl1 ;
+			my $seq = lc $r->[0]->[8] ;
+			$seq .= '_' x $between ;
+			$seq .= lc $r->[1]->[8] ;
+			add_pileup ( $from1 , $seq , length $seq , $r_bands , $r_btype , $mode , $dist , 1 ) ;
+		} else {
+			if ( $from1 <= $to and $from1 >= $from - $rl1 ) {
+				add_pileup ( $from1 , lc $r->[0]->[8] , $rl1 , $r_bands , $r_btype , $mode , $dist , 1 ) ;
+			}
+			if ( defined $from2 and $from2 <= $to and $from2 >= $from - $rl2 ) {
+				add_pileup ( $from2 , lc $r->[1]->[8] , $rl2 , $r_bands , $r_btype , $mode , $dist , 1 ) ;
+			}
+		}
+	}
+}
+
 sub pile2bands {
 	my ( $r_reads , $r_bands , $r_btype , $rl , $mode , $paired_pileup , $fragment ) = @_ ;
 
@@ -726,7 +767,7 @@ sub pileup_my_refseq_part {
 }
 
 sub add_pileup {
-	my ( $start , $read_sequence , $rl , $rbands , $rbtype , $mode , $dist ) = @_ ;
+	my ( $start , $read_sequence , $rl , $rbands , $rbtype , $mode , $dist , $sam ) = @_ ;
 	my $min ;
 	my $max ;
 	my $out = '' ;
@@ -738,7 +779,16 @@ sub add_pileup {
 		$min = $onref unless defined $min ;
 		$max = $onref ;
 		if ( $read_sequence ) {
-			$out .= substr ( $read_sequence , $_ , 1 )  ;
+			if ( defined $sam ) {
+				my $ch = substr ( $read_sequence , $_ , 1 )  ;
+				if ( $ch eq '_' or $ch eq lc substr ( $refseq , $onref , 1 ) ) {
+					$out .= $ch ;
+				} else {
+					$out .= uc substr ( $refseq , $onref , 1 ) ;
+				}
+			} else {
+				$out .= substr ( $read_sequence , $_ , 1 )  ;
+			}
 		} else {
 			$out .= lc substr ( $refseq , $onref , 1 ) ;
 		}
@@ -760,7 +810,7 @@ sub add_pileup {
 		push @{$rbtype} , ( ' ' x $reflen ) ;
 	}
 	
-	if ( $mode != 1 and $mode != 3 ) {
+	if ( $mode != 1 and $mode != 3 and not defined $sam ) {
 		$mode += 100 if $dist > $cur_meta{'fragment'} + $cur_meta{'variance'} or $dist < $cur_meta{'fragment'} - $cur_meta{'variance'}  ;
 	}
 	substr ( $rbands->[$use_band] , $min , length $out ) = $out ;
@@ -797,6 +847,22 @@ sub add_coverage {
 	}
 }
 
+sub add_coverage_sam_single {
+	my ( $r ) = @_ ;
+	my $start = $r->[2] - $from ;
+	my $end = $start + length $r->[8] ;
+	$start = 1 if $start < 1 ;
+	$coverage[$_]++ foreach ( $start .. $end ) ;
+}
+
+sub add_coverage_sam {
+	my ( $data , $single ) = ( @_ , 0 ) ;
+	foreach ( @{$data} ) {
+		my $d = $sam_reads{$_} ;
+		add_coverage_sam_single ( $d->[0] ) ;
+		add_coverage_sam_single ( $d->[1] ) unless $single ;
+	}
+}
 
 sub dump_image_coverageview {
 	my $ft = $to - $from + 1 ;
@@ -829,6 +895,13 @@ sub dump_image_coverageview {
 		add_coverage ( $pmr , $ft , 0 ) ;
 		add_coverage ( $sin , $ft , 1 ) ;
 		add_coverage ( $inv , $ft , 0 ) ;
+	}
+	
+	if ( $using_bam ) {
+		add_coverage_sam ( \@sam_perfect ) ;
+		add_coverage_sam ( \@sam_snps ) ;
+		add_coverage_sam ( \@sam_inversions ) ;
+		add_coverage_sam ( \@sam_single , 1 ) ;
 	}
 
 	$height = 0 ;
@@ -977,7 +1050,7 @@ sub dump_image_indelview {
 		}
 		if ($using_bam ) {
 			sam_paint_single_short_reads ( \@sam_single , $sam_col_single_read ) ;
-			sam_paint_short_single_reads_quality ( \@sam_single , $sam_col_single_read_quality ) ;
+			sam_paint_short_single_reads_quality ( \@sam_single , $sam_col_single_read_quality ) if $sam_show_read_quality ;
 		}
 	}
 
@@ -1715,8 +1788,8 @@ sub sam_paint {
 sub sam_read_data {
 	my ( $file_bam ) = @_ ;
 	
-	my $from2 = $from - 200 ;
-	my $to2 = $to + 100 ;
+	my $from2 = $from - 1000 ;
+	my $to2 = $to + 1000 ;
 	$from2 = 1 if $from2 < 1 ;
 	
 	$chromosome =~ /([a-zA-Z0-9_.]+)/ ;
@@ -1726,24 +1799,44 @@ sub sam_read_data {
 	$ENV{'PATH'} =~ /(.*)/;
 	$ENV{'PATH'} = $1;
 	
+#	print $cgi->header(-type=>'text/plain',-expires=>'-1s'); # For debugging output
 	open PIPE , "$cmd |" ;
 	while ( <PIPE> ) {
 		$_ =~ /^(\S+)\s(.+)+$/ ;
 		my @a = split "\t" , $2 ;
-		next unless $display_single or $a[0] & 0x0002 ; # Don't load single reads unless we display them
+#		next if ( $a[0] & 0x0008 ) > 0 ;
+#		next unless $display_single or $a[0] & 0x0002 ; # Don't load single reads unless we display them
+=cut
+		my $single ;
+		if ( ( $a[0] & 0x0001 ) > 0 ) {
+			$single = 1 if ( $a[0] & 0x0008 ) > 0 ;
+		} else {
+			$single = 1 ;
+		}
+
+		if ( $single ) {
+			print $a[0] . "\t" . $a[2] . "\n" ;
+		}
+=cut
 		push @{$sam_reads{$1}} , \@a ;
 	}
 	close PIPE ;
+#	exit ;
 }
 
 
 # Separate into bins
 sub sam_bin {
 	foreach my $read ( keys %sam_reads ) {
-#		print "$read\n" ;
 		my $r = $sam_reads{$read} ;
-		if ( 2 != scalar @{$r} ) {
-			if ( 1 == scalar @{$r} ) { # Single read
+		my $single = ( 2 == scalar ( @{$r} ) and $r->[0]->[2] == $r->[1]->[2] and $r->[0]->[1] == $r->[1]->[1] ) ;
+		
+		if ( 2 != scalar @{$r} or $single ) {
+			if ( 1 == scalar @{$r} or $single ) { # Single read
+				next if ( $r->[0]->[0] & 0x0002 ) > 0 ;
+				
+				$r->[0] = $r->[1] if 2 == scalar ( @{$r} ) and 0 == ( $r->[0]->[0] & 0x0008 ) ;
+				
 				sam_check4snps ( $r->[0] ) ;
 				push @sam_single , $read ; # FIXME detect capillary
 			} elsif ( 2 < scalar @{$r} ) {
@@ -1833,26 +1926,33 @@ sub sam_paint_short_read_pair_connections {
 
 sub sam_get_single_read_height {
 	my ( $r ) = @_ ;
+	return abs ( ( $r->[2] - $from ) % 50 ) ;
 	my $y = hex ( substr md5_hex ( $r->[9] ) , 0 , 8 ) % ( $height - $scale_height ) ;
 #	my $y = $r->[2] % ( $height - $scale_height ) ;
 	$y = $height - $scale_height - $y ;
 	return $y ;
 }
 
+
 sub sam_paint_single_short_reads {
 	my ( $r , $col ) = @_ ;
+#	print $cgi->header(-type=>'text/plain',-expires=>'-1s'); # For debugging output
+#	my @out ;
 	foreach ( @{$r} ) {
 		my $r = $sam_reads{$_}->[0] ;
-		my $y = get_single_read_height ( $r ) ;
+		my $y = sam_get_single_read_height ( $r ) ;
+#		push @out , $r->[2] . "\t$from\n" ;
 		sam_paint_single_short_read ( $r , $col , $y , 1 ) ;
 	}
+#	print join '' , sort @out ;
+#	exit ;
 }
 
 sub sam_paint_short_single_reads_quality {
 	my ( $r , $col ) = @_ ;
 	foreach ( @{$r} ) {
 		my $r = $sam_reads{$_}->[0] ;
-		my $y = get_single_read_height ( $r ) ;
+		my $y = sam_get_single_read_height ( $r ) ;
 		sam_paint_single_short_read_quality ( $r , $y , $col ) ;
 	}
 }
@@ -1916,10 +2016,14 @@ sub sam_paint_single_short_read {
 	my ( $r , $col , $y , $draw_snps ) = @_ ;
 	my $x1 = $r->[2] - $from ;
 	my $x2 = $x1 + length $r->[8] ;
+	return if $x1 < 0 and $x2 < 0 ;
+
 	$x1 = int ( $x1 * $width / $ft ) ;
 	$x2 = int ( $x2 * $width / $ft ) ;
-	$im->line ( $x1 , $y , $x2 , $y , $col ) ;
 	
+	return if $x1 > $width and $x2 > $width ;
+	
+	$im->line ( $x1 , $y , $x2 , $y , $col ) ;
 	if ( $sam_show_read_arrows ) {
 		if ( $r->[0] & 0x0010 ) { # reverse
 			my $xn = int ( $x1 + ( $x2 - $x1 ) / 5 ) ;
