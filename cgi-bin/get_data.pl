@@ -716,6 +716,7 @@ sub pile2bands_sam {
 	}
 }
 
+
 sub pile2bands {
 	my ( $r_reads , $r_bands , $r_btype , $rl , $mode , $paired_pileup , $fragment ) = @_ ;
 
@@ -784,7 +785,7 @@ sub add_pileup {
 				if ( $ch eq '_' or $ch eq lc substr ( $refseq , $onref , 1 ) ) {
 					$out .= $ch ;
 				} else {
-					$out .= uc substr ( $refseq , $onref , 1 ) ;
+					$out .= uc substr ( $read_sequence , $_ , 1 )  ;
 				}
 			} else {
 				$out .= substr ( $read_sequence , $_ , 1 )  ;
