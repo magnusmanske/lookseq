@@ -14,7 +14,9 @@ var chromosomes = new Array () ;
 var chromosome_length = new Array () ;
 var display_mode = 'indel' ;
 var last_main_image_url = '' ;
+var last_url_second = '' ;
 var lane_select = 'single' ;
+var second_track_lanes = '' ;
 var hbar_shown = 0 ;
 var viewportwidth;
 var viewportheight;
@@ -426,29 +428,19 @@ function update_image () {
 	var annotation_url = url + '&view=annotation' ;
 	var gc_url = url + '&view=gc' ;
 
-	var lanes ;
-	if ( lane_select == 'single' ) {
-		lanes = current_lane ;
-	} else {
-		lanes = new Array () ;
-		for ( f = 0 ; f < document.forms.length ; f++ ) {
-			if ( document.forms[f].name == 'lanes' ) break
-		}
-		for ( n = 0 ; n < document.forms[f].elements.length ; n++ ) {
-			if ( document.forms[f].elements[n].type != 'checkbox' ) continue ;
-			if ( !document.forms[f].elements[n].checked ) continue ;
-			lanes.push ( document.forms[f].elements[n].value ) ;
-		}
-		lanes = lanes.join ( ',' ) ;
-	}
+	var url_second = url ;
+	var lanes = condense_lanes_for_url () ;
 	url += '&lane=' + lanes ;
 	var coverage_url = url + '&view=coverage&display=|noscale' + display ;
 
-	url += '&view=' + display_mode ;
-	url += '&display=' + display ;
-	url += '&debug=' ;
-	url += test ? '1' : '0' ;
-	if ( indel_zoom != 'auto' ) url += '&maxdist=' + indel_zoom ;
+	var url_part2 = '' ;
+	url_part2 += '&view=' + display_mode ;
+	url_part2 += '&display=' + display ;
+	url_part2 += '&debug=' ;
+	url_part2 += test ? '1' : '0' ;
+	if ( indel_zoom != 'auto' ) url_part2 += '&maxdist=' + indel_zoom ;
+	if ( document.getElementById('squeeze_tracks').checked ) url_part2 += '&height=256' ;
+	url += url_part2 ;
 	
 	document.getElementById('vruler').style.display = 'none' ;
 	
@@ -468,6 +460,14 @@ function update_image () {
 		load++ ;
 		last_main_image_url = url ;
 	}
+	if ( document.getElementById('display_second_track').checked && last_url_second != url_second ) {
+		url_second += '&lane=' + second_track_lanes + url_part2 ;
+//		alert ( url_second ) ;
+		setOpacity ( document.getElementById('second_image') , opaq ) ;
+		document.getElementById('second_image').src = url_second ;
+		load++ ;
+		last_url_second = url_second ;
+	}
 	if ( show_gc ) {
 		setOpacity ( document.getElementById('gc_image') , opaq ) ;
 		document.getElementById('gc_image').src = gc_url ;
@@ -486,6 +486,26 @@ function update_image () {
 	update_hbar () ;
 	loading ( load ) ;
 }
+
+function condense_lanes_for_url () {
+	var lanes ;
+	if ( lane_select == 'single' ) {
+		lanes = current_lane ;
+	} else {
+		lanes = new Array () ;
+		for ( f = 0 ; f < document.forms.length ; f++ ) {
+			if ( document.forms[f].name == 'lanes' ) break
+		}
+		for ( n = 0 ; n < document.forms[f].elements.length ; n++ ) {
+			if ( document.forms[f].elements[n].type != 'checkbox' ) continue ;
+			if ( !document.forms[f].elements[n].checked ) continue ;
+			lanes.push ( document.forms[f].elements[n].value ) ;
+		}
+		lanes = lanes.join ( ',' ) ;
+	}
+	return lanes ;
+}
+
 
 // Event handler : Button to move image to the left was clicked.
 function image_left () {
@@ -525,6 +545,14 @@ function main_image_loaded () {
 	loading ( -1 ) ;
 }
 
+// Callback function for loading the secondary image.
+function second_image_loaded () {
+	document.getElementById('img_container').style.width = img_width + 'px' ;
+	document.getElementById('legend_container').style.width = img_width + 'px' ;
+	reset_image_display ( 'second_image' ) ;
+	loading ( -1 ) ;
+}
+
 // Callback function for loading the annotation image.
 function annotation_image_loaded () {
 	reset_image_display ( 'annotation_image' ) ;
@@ -552,6 +580,27 @@ function loading ( diff ) {
 	if ( is_loading == 0 ) { // Turn off loading
 		document.getElementById('loading').style.display = 'none' ;
 		document.getElementById('img_container').style.position = '' ;
+	}
+}
+
+// Event handler : Squeeze tracks toggled
+function toggle_squeeze_tracks () {
+	update_image () ;
+}
+
+// Event handler : Second track toggled
+function toggle_second_track () {
+	var checked = document.getElementById('display_second_track').checked ;
+	if ( checked ) {
+		document.getElementById('squeeze_tracks').disabled = false ;
+		document.getElementById('second_image').style.display = 'block' ;
+		second_track_lanes = condense_lanes_for_url () ;
+		update_image () ;
+	} else {
+		document.getElementById('squeeze_tracks').checked = false ;
+		document.getElementById('squeeze_tracks').disabled = true ;
+		document.getElementById('second_image').style.display = 'none' ;
+		update_image () ;
 	}
 }
 
@@ -664,6 +713,7 @@ function mouse_moved_over_main_image ( event ) {
 	if ( is_loading > 0 ) return ;
 	
 	var h = document.getElementById("main_image").height ;
+	h += document.getElementById('display_second_track').checked ? 2+document.getElementById('second_image').clientHeight : 0 ;
 	h += document.getElementById('display_annotation').checked ? 2+document.getElementById('annotation_image').clientHeight : 0 ;
 	h += document.getElementById('display_gc').checked ? 2+document.getElementById('gc_image').clientHeight : 0 ;
 	h += document.getElementById('display_coverage').checked ? 2+document.getElementById('coverage_image').clientHeight : 0 ;
@@ -1139,6 +1189,7 @@ function movemouse(e)
 	var new_to = new_from + cur_diff ;
 	if ( new_to >= maxw ) return ;
     document.getElementById('main_image').style.left = newx + "px" ;
+    document.getElementById('second_image').style.left = newx + "px" ;
     document.getElementById('annotation_image').style.left = newx + "px" ;
     document.getElementById('gc_image').style.left = newx + "px" ;
     document.getElementById('coverage_image').style.left = newx + "px" ;

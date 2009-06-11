@@ -73,6 +73,8 @@ leg_50	50%
 leg_wr	window range
 helper_displays	Also
 cb_coverage	Coverage
+cb_second_track	Secondary track
+cb_squeeze_tracks	Squeeze tracks
 
 reflink	Use <a id='reflink' href=''>this link</a> as a reference to the current view. Drag the image to view a different part of the chromosome. Double-click the image to center and zoom in.
 daad1	Display is out of date;

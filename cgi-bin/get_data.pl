@@ -1835,6 +1835,7 @@ sub sam_bin {
 		if ( 2 != scalar @{$r} or $single ) {
 			if ( 1 == scalar @{$r} or $single ) { # Single read
 				next if ( $r->[0]->[0] & 0x0002 ) > 0 ;
+				next unless $display_single ;
 				
 				$r->[0] = $r->[1] if 2 == scalar ( @{$r} ) and 0 == ( $r->[0]->[0] & 0x0008 ) ;
 				
