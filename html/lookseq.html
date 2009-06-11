@@ -34,6 +34,8 @@
 InDel size
 <select name='indel_zoom' id='indel_zoom' onchange='indel_zoom_changed()'>
 <option value='auto'>%INDEL_ZOOM_AUTO%</option>
+<option value='300'>300</option>
+<option value='400'>400</option>
 <option value='500'>500</option>
 <option value='1000'>1000</option>
 <option value='1500'>1500</option>
@@ -72,14 +74,17 @@ InDel size
 <span style='margin-right:3px'><input type='checkbox' id='display_annotation' onclick="update_image()" checked="checked"/><label for="display_annotation">%OPT_ANN%</label></span>
 <span style='margin-right:3px'><input type='checkbox' id='display_gc' onclick="update_image()" /><label for="display_gc">%OPT_GC%</label></span>
 <span style='margin-right:3px'><input type='checkbox' id='display_coverage' onclick="update_image()" /><label for="display_coverage">%CB_COVERAGE%</label></span>
-<span>
+<span style='margin-right:3px'>
 <input id='search_query' name='search_query' type='text' value='' size='10' />
 <input type='button' value='%BUTTON_SEARCH%' onclick='on_search()' />
 </span>
+<span style='margin-right:3px'><input type='checkbox' id='display_second_track' onclick="toggle_second_track()" /><label for="display_second_track">%CB_SECOND_TRACK%</label></span>
+<span><input type='checkbox' id='squeeze_tracks' onclick="toggle_squeeze_tracks()" disabled /><label for="squeeze_tracks">%CB_SQUEEZE_TRACKS%</label></span>
 </div>
 <div id='img_container' style='border:2px solid gray;background:#CCCCCC;overflow:hidden'>
 <div id='vruler' style='border-right:1px dotted red;z-index:5;position:absolute'></div>
 <img id='main_image' onload='main_image_loaded()' class='dragme' ondblclick='main_image_clicked(event)' onmouseout='hide_vruler()'  onmousemove='mouse_moved_over_main_image(event)' style='position:relative' alt='' src='' />
+<img id='second_image' onload='second_image_loaded()' class='dragme' ondblclick='main_image_clicked(event)' onmouseout='hide_vruler()'  onmousemove='mouse_moved_over_main_image(event)' style='position:relative;border-top:2px solid red;display:none' alt='' src='' />
 <img id='annotation_image' onload='annotation_image_loaded()' class='dragme' onmouseout='hide_vruler()'  onmousemove='mouse_moved_over_main_image(event)' ondblclick='annotation_clicked(event)' style='position:relative;margin-top:2px' alt='' src='' />
 <img id='gc_image' onload='gc_image_loaded()' class='dragme' onmouseout='hide_vruler()'  onmousemove='mouse_moved_over_main_image(event)' ondblclick='main_image_clicked(event)' style='position:relative;margin-top:2px' alt='' src='' />
 <img id='coverage_image' onload='coverage_image_loaded()' class='dragme' onmouseout='hide_vruler()'  onmousemove='mouse_moved_over_main_image(event)' ondblclick='main_image_clicked(event)' style='position:relative;margin-top:2px' alt='' src='' />
