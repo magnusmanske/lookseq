@@ -597,10 +597,9 @@ function toggle_squeeze_tracks () {
 function toggle_second_track () {
 	var checked = document.getElementById('display_second_track').checked ;
 	if ( checked ) {
-//		document.getElementById('squeeze_tracks').disabled = false ;
-//		document.getElementById('second_image').style.display = 'block' ;
-		show_second_image () ;
 		second_track_lanes = condense_lanes_for_url () ;
+		show_second_image () ;
+		document.getElementById('squeeze_tracks').checked = true ;
 		update_image () ;
 	} else {
 		document.getElementById('squeeze_tracks').checked = false ;
