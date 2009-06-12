@@ -84,7 +84,8 @@ InDel size
 <div id='img_container' style='border:2px solid gray;background:#CCCCCC;overflow:hidden'>
 <div id='vruler' style='border-right:1px dotted red;z-index:5;position:absolute'></div>
 <img id='main_image' onload='main_image_loaded()' class='dragme' ondblclick='main_image_clicked(event)' onmouseout='hide_vruler()'  onmousemove='mouse_moved_over_main_image(event)' style='position:relative' alt='' src='' />
-<img id='second_image' onload='second_image_loaded()' class='dragme' ondblclick='main_image_clicked(event)' onmouseout='hide_vruler()'  onmousemove='mouse_moved_over_main_image(event)' style='position:relative;border-top:2px solid red;display:none' alt='' src='' />
+<div id='second_image_name' style='margin-top:3px;margin-left:3px;color:#AAAAAA;position:absolute;z-index:9;display:none'></div>
+<img id='second_image' onload='second_image_loaded()' class='dragme' ondblclick='main_image_clicked(event)' onmouseout='hide_vruler()'  onmousemove='mouse_moved_over_main_image(event)' style='position:relative;border-top:1px solid red;display:none' alt='' src='' />
 <img id='annotation_image' onload='annotation_image_loaded()' class='dragme' onmouseout='hide_vruler()'  onmousemove='mouse_moved_over_main_image(event)' ondblclick='annotation_clicked(event)' style='position:relative;margin-top:2px' alt='' src='' />
 <img id='gc_image' onload='gc_image_loaded()' class='dragme' onmouseout='hide_vruler()'  onmousemove='mouse_moved_over_main_image(event)' ondblclick='main_image_clicked(event)' style='position:relative;margin-top:2px' alt='' src='' />
 <img id='coverage_image' onload='coverage_image_loaded()' class='dragme' onmouseout='hide_vruler()'  onmousemove='mouse_moved_over_main_image(event)' ondblclick='main_image_clicked(event)' style='position:relative;margin-top:2px' alt='' src='' />
