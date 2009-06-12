@@ -347,6 +347,11 @@ function update_reflink ( lanes , display ) {
 	reflink += '&lane=' + lanes + '&width=' + img_width ;
 	reflink += '&display=' + display ;
 	if ( indel_zoom != 'auto' ) reflink += '&maxdist=' + indel_zoom ;
+	if ( document.getElementById('display_second_track').checked ) {
+		reflink += '&second_image=' + second_track_lanes ;
+		if ( document.getElementById('squeeze_tracks').checked )
+			reflink += '&squeeze_tracks=1' ;
+	}
 	document.getElementById('reflink').href = reflink ;
 }
 
@@ -592,14 +597,16 @@ function toggle_squeeze_tracks () {
 function toggle_second_track () {
 	var checked = document.getElementById('display_second_track').checked ;
 	if ( checked ) {
-		document.getElementById('squeeze_tracks').disabled = false ;
-		document.getElementById('second_image').style.display = 'block' ;
+//		document.getElementById('squeeze_tracks').disabled = false ;
+//		document.getElementById('second_image').style.display = 'block' ;
+		show_second_image () ;
 		second_track_lanes = condense_lanes_for_url () ;
 		update_image () ;
 	} else {
 		document.getElementById('squeeze_tracks').checked = false ;
 		document.getElementById('squeeze_tracks').disabled = true ;
 		document.getElementById('second_image').style.display = 'none' ;
+		document.getElementById('second_image_name').style.display = 'none' ;
 		update_image () ;
 	}
 }
@@ -1035,6 +1042,25 @@ function white_wizard_cancel () {
 	fade ( 'darkenScreenObject' , 50 , -1 ) ;
 }
 
+// Parses the current URL for a parameter and returns the value
+function get_url_parameter( name ) {
+	name = name.replace(/[\[]/,"\\\[").replace(/[\]]/,"\\\]");
+	var regexS = "[\\?&]"+name+"=([^&#]*)";
+	var regex = new RegExp ( regexS );
+	var results = regex.exec ( window.location.href );
+	if ( results == null ) return "";
+	return results[1];
+}
+
+function show_second_image () {
+	document.getElementById("display_second_track").checked = 1 ;
+	document.getElementById('squeeze_tracks').disabled = false ;
+	document.getElementById('second_image').style.display = 'block' ;
+	document.getElementById('second_image_name').style.display = 'block' ;
+	removeChildrenFromNode ( document.getElementById('second_image_name') ) ;
+	document.getElementById('second_image_name').appendChild ( document.createTextNode ( second_track_lanes ) ) ;
+}
+
 // Initializes everything!
 function init () {
 	document.onmousedown = selectmouse ;
@@ -1056,6 +1082,15 @@ function init () {
 	if ( use_init ) {
 		document.getElementById('chr_from').value = init_from ;
 		document.getElementById('chr_to').value = init_to ;
+		
+		var init_second_image = get_url_parameter ( 'second_image' ) ;
+		var init_squeeze_tracks = get_url_parameter ( 'squeeze_tracks' ) ;
+		
+		if ( init_second_image != '' ) {
+			second_track_lanes = init_second_image ;
+			show_second_image () ;
+			if ( init_squeeze_tracks ) document.getElementById("squeeze_tracks").checked = 1 ;
+		}
 		
 		var cidx = 0 ;
 		for ( var i = 0 ; i < chromosomes.length ; i++ ) {
