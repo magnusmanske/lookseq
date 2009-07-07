@@ -71,6 +71,11 @@ leg_gc_title	GC% :
 leg_gc	%GC
 leg_50	50%
 leg_wr	window range
+leg_cov2	Comparative coverage : 
+leg_cov2_top	Top sample
+leg_cov2_bot	Bottom sample
+leg_cov2_both	Joined coverage
+
 helper_displays	Also
 cb_coverage	Coverage
 cb_second_track	Secondary track
