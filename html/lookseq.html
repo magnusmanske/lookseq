@@ -7,7 +7,7 @@
 <span style='margin-right:6px'><select name='chr_list' id='chr_list' onchange='chromosome_changed()'></select></span>
 <span style='margin-right:6px'>%FROM% <input type='text' id='chr_from' value='1' size='5' /></span>
 <span style='margin-right:6px'>%TO% <input type='text' id='chr_to' value='150000' size='5' /></span>
-<span style='margin-right:6px'><input type='button' name='update_image' value='%UPDATE_IMAGE_BUTTON%' onclick='update_image();' checked="checked" /></span>
+<span style='margin-right:6px'><input type='button' name='update_image' value='%UPDATE_IMAGE_BUTTON%' onclick='update_image();' /></span>
 <span style='display:none;margin-right:6px' id='span_sanger_bars'><input id='button_sanger_bars' type="button" onclick="toggle_sanger_stuff()" value="%HIDE_SANGER_BARS_BUTTON%" /></span>
 <span id='insert_organism_specific_buttons_here'></span>
 <span style='margin-right:12px'>
@@ -136,6 +136,11 @@ InDel size
 <span style="border-left:3px solid blue; margin-right:5px; padding-left:1px">%LEG_GC%</span>
 <span style="border-left:3px solid red; margin-right:5px; padding-left:1px">%LEG_50%</span>
 [&plusmn;%LEG_WR%]
+</div>
+<div style='display:none' id='legend_coverage_two_samples'>%LEG_COV2% 
+<span style="border-left:3px solid #44B4D5; margin-right:5px; padding-left:1px">%LEG_COV2_TOP%</span>
+<span style="border-left:3px solid #72FE95; margin-right:5px; padding-left:1px">%LEG_COV2_BOT%</span>
+<span style="border-left:3px solid #EDEF85; margin-right:5px; padding-left:1px">%LEG_COV2_BOTH%</span>
 </div>
 <div style='font-size:8pt'>%REFLINK%
 <div id='ie_warning' style='display:none;font-size:7pt;font-style:italic;'></div>

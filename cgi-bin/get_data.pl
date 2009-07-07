@@ -14,6 +14,7 @@ use GD ;
 use Time::HiRes qw( usleep ualarm gettimeofday tv_interval nanosleep );
 use settings ;
 use Data::Dumper ;
+ use LWP::Simple;
 
 my $cgi = new CGI;
 my $time0 = [gettimeofday()];
@@ -909,13 +910,49 @@ sub dump_image_coverageview {
 	foreach ( @coverage ) {
 		$height = $_ if $_ > $height ;
 	}
-#	$scale_height = $display_noscale ? 0 : 20 ;
-	$height += $scale_height ; # Scale
 
+	my $second = $cgi->param ( 'second' ) ;
+	my @mpp2 ;
+	if ( $second ) {
+		my $u = $cgi->url() ;
+		my @p = $cgi->param ;
+		my @p2 ;
+		foreach my $k ( @p ) {
+			next if $k eq 'lane' ;
+			my $v = $cgi->param($k) ;
+			if ( $k eq 'second' ) {
+				$k = 'lane' ;
+				$v = $cgi->param('second') ;
+			}
+			$v = 'text' if $k eq 'output' ;
+			push @p2 , "$k=$v" ;
+		}
+		$u .= "?" . join ( '&' , @p2 ) ;
+		my $c = get ( $u ) ;
+		@mpp2 = split "\n" , $c ;
+		foreach ( @mpp2 ) {
+			$height = $_ if $_ > $height ;
+		}
+		
+#		print $cgi->header(-type=>'text/plain',-expires=>'-1s');
+#		print $u ;
+#		exit ;
+	}
+
+	$height += $scale_height ; # Scale
+	
 	my $im = new GD::Image ( $width , $height ) ;
 	my $white = $im->colorAllocate ( 255 , 255 , 255 ) ;
 	my $black = $im->colorAllocate ( 0 , 0 , 0 ) ;
-	my $blue = $im->colorAllocate ( 0 , 0 , 255 ) ;
+	
+	my ( $col , $col2 , $col3 ) ;
+	if ( $second ) {
+		$col = $im->colorAllocate ( 0x44 , 0xB4 , 0xD5  ) ; # Blue
+		$col2 = $im->colorAllocate ( 0x72 , 0xFE , 0x95  ) ; # Green
+		$col3 = $im->colorAllocate ( 0xED , 0xEF , 0x85 ) ; # Yellow
+	} else {	
+		$col = $im->colorAllocate ( 0 , 0 , 255  ) ;
+	}
 
 	my @max_per_pixel ;
 	$max_per_pixel[$_] = 0 foreach ( 0 .. $width ) ;
@@ -923,25 +960,66 @@ sub dump_image_coverageview {
 		my $x1 = int ( $width * $pos / $ft ) ;
 		$max_per_pixel[$x1] = $coverage[$pos] if $max_per_pixel[$x1] < $coverage[$pos] ;
 	}
+
+	# Return data as text if requested
+	if ( $output eq 'text' ) {
+		print $cgi->header(-type=>'text/plain',-expires=>'-1s');
+		if ( $ft >= $width ) {
+			print join "\n" , @max_per_pixel ;
+		} else {
+			print join "\n" , @coverage ;
+		}
+		return ;
+	}
 	
 	if ( $ft >= $width ) {
 		foreach ( 0 .. $width-1 ) {
-			my $y = $height - $scale_height - $max_per_pixel[$_] ;
-			$im->line ( $_ , $y , $_ , $height - $scale_height , $blue ) ;
+			
+#			$im->line ( $_ , $y , $_ , $height - $scale_height , $col ) ;
+			if ( $second ) {
+				my $y1 = $height - $scale_height - $max_per_pixel[$_] ;
+				my $y2 = $height - $scale_height - $mpp2[$_] ;
+				$im->line ( $_ , $y2 , $_ , $height - $scale_height , $col2 ) ;
+				$im->line ( $_ , $y1 , $_ , $height - $scale_height , $col ) ;
+				$y2 = $y1 if $y1 > $y2 ;
+				$im->line ( $_ , $y2 , $_ , $height - $scale_height , $col3 ) ;
+			} else {
+				my $y = $height - $scale_height - $max_per_pixel[$_] ;
+				$im->line ( $_ , $y , $_ , $height - $scale_height , $col ) ;
+			}
 		}
 	} else {
 		foreach my $pos ( 0 .. $ft-1 ) {
 			my $x1 = int ( $width * $pos / $ft ) ;
-			next if $max_per_pixel[$x1] > $coverage[$pos] ;
+#			next if $max_per_pixel[$x1] > $coverage[$pos] ;
 			my $x2 = int ( $width * ( $pos + 1 ) / $ft - 1 ) ;
 			my $y = $height - $scale_height - $coverage[$pos] ;
+			if ( $second ) {
+				my $y2 = $height - $scale_height - $mpp2[$pos] ;
+				if ( $x2 > $x1 ) {
+					$im->filledRectangle ( $x1 , $y2 , $x2 , $height - $scale_height , $col2 ) ;
+				} else {
+					$im->line ( $x1 , $y2 , $x1 , $height - $scale_height , $col2 ) ;
+				}
+			}
 			if ( $x2 > $x1 ) {
-				$im->filledRectangle ( $x1 , $y , $x2 , $height - $scale_height , $blue ) ;
+				$im->filledRectangle ( $x1 , $y , $x2 , $height - $scale_height , $col ) ;
 			} else {
-				$im->line ( $x1 , $y , $x1 , $height - $scale_height , $blue ) ;
+				$im->line ( $x1 , $y , $x1 , $height - $scale_height , $col ) ;
+			}
+			if ( $second ) {
+				my $y2 = $height - $scale_height - $mpp2[$pos] ;
+				$y2 = $y if $y2 < $y ;
+				if ( $x2 > $x1 ) {
+					$im->filledRectangle ( $x1 , $y2 , $x2 , $height - $scale_height , $col3 ) ;
+				} else {
+					$im->line ( $x1 , $y2 , $x1 , $height - $scale_height , $col3 ) ;
+				}
 			}
 		}
 	}
+	
+
 
 	unless ( $display_noscale ) {
 		draw_h_axis ( $im , $black ) ;
@@ -955,7 +1033,7 @@ sub dump_image_coverageview {
 
 
 	show_debugging_output ( $im , $black ) ;
-
+	
 	write_png ( $im ) ;
 }
 
@@ -2091,6 +2169,8 @@ if ( $output eq 'image' ) {
 } elsif ( $output eq 'text' ) {
 	if ( $view eq 'pileup' ) {
 		&dump_image_pileupview ;
+	} elsif ( $view eq 'coverage' ) {
+		&dump_image_coverageview ;
 	} else {
 		&dump_text ;
 	}

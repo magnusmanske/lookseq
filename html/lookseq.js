@@ -390,6 +390,8 @@ function update_image () {
 	document.getElementById("legend_annotation").style.display = document.getElementById('display_annotation').checked ? 'block' : 'none' ;
 	document.getElementById("legend_gc").style.display = document.getElementById('display_gc').checked ? 'block' : 'none' ;
 	document.getElementById("legend_inv").style.display = document.getElementById('display_inversions_ext').checked ? 'block' : 'none' ;
+	document.getElementById("legend_coverage_two_samples").style.display = document.getElementById('display_coverage').checked && document.getElementById('display_second_track').checked ? 'block' : 'none' ;
+	
 	
 	document.getElementById("display_pair_links").disabled = display_mode != 'indel' && display_mode != 'paired_pileup' ;
 	document.getElementById('display_inversions_ext').disabled = document.getElementById('display_inversions').checked && display_mode == 'indel' ? false : true ;
@@ -457,6 +459,7 @@ function update_image () {
 	display += show_coverage ? 'coverage|' : '' ; // Is ignored by image drawing routine, but used by update_reflink()
 	update_reflink ( lanes , display ) ;
 
+	var dst = document.getElementById('display_second_track').checked ;
 	var load = 0 ;
 	var opaq = 20 ;
 	if ( last_main_image_url != url ) {
@@ -465,7 +468,7 @@ function update_image () {
 		load++ ;
 		last_main_image_url = url ;
 	}
-	if ( document.getElementById('display_second_track').checked && last_url_second != url_second ) {
+	if ( dst && last_url_second != url_second ) {
 		url_second += '&lane=' + second_track_lanes + url_part2 ;
 //		alert ( url_second ) ;
 		setOpacity ( document.getElementById('second_image') , opaq ) ;
@@ -485,6 +488,7 @@ function update_image () {
 	}
 	if ( show_coverage ) {
 		setOpacity ( document.getElementById('coverage_image') , opaq ) ;
+		if ( dst ) coverage_url += "&second=" + second_track_lanes ;
 		document.getElementById('coverage_image').src = coverage_url ;
 		load++ ;
 	}
