@@ -81,7 +81,7 @@ $from =~ s/\D//g ;
 $to =~ s/\D//g ;
 $chromosome =~ s/[^A-Za-z0-9\-_\.]//g ;
 my $orig_chr = $chromosome ;
-$chromosome = "chr_$chromosome" if $chromosome =~ /^\d/ ;
+#$chromosome = "chr_$chromosome" if $chromosome =~ /^\d/ ;
 
 unless ( $view eq 'annotation' or $view eq 'gc' ) {
 	die "ERROR\nNot a valid lane\n" if $database eq '' ;
