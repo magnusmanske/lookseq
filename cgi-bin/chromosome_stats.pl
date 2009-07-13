@@ -41,9 +41,30 @@ sub get_chromosomes_from_genome_file {
 	$chromosomes{$lchr} = $s if $lchr ne '' ;
 }
 
-get_chromosomes_from_genome_file ( $genome_file ) ;
-
 print $cgi->header(-type=>'text/plain',-expires=>'-1s');
-foreach ( sort keys %chromosomes ) {
-	print "$_\t" . length ( $chromosomes{$_} ) . "\n" ;
+
+if ( $reference_fa ) { # Use SAMTOOLS .fa file
+
+	my $fai_file = "$datapath/$reference_fa.fai";
+
+	open FILE , $fai_file or die("$fai_file: $!");
+	while ( <FILE> )
+	{
+		die "Unexpected format of $genome_fai_file: $_\n" if $_ !~ /^(\S+)\s+(\d+)\s+/ ;
+		my ( $chrom , $length ) = ( $1 , $2 ) ;
+		next if $chrom !~ /^(?:\d+|x|y)$/i ;
+		$chromosomes{$chrom} = $length;
+	}
+	close FILE ;
+
+	foreach ( sort keys %chromosomes ) 
+	{
+		print "$_\t$chromosomes{$_}\n" ;
+	}
+
+} else { # Use "traditional" fasta
+	get_chromosomes_from_genome_file ( $genome_file ) ;
+	foreach ( sort keys %chromosomes ) {
+		print "$_\t" . length ( $chromosomes{$_} ) . "\n" ;
+	}
 }
