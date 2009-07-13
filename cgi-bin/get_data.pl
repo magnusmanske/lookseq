@@ -393,6 +393,23 @@ sub get_chromosome_from_genome_file {
 # Cut out the interesting part
 sub get_chromosome_part {
 	my ( $file , $chromosome , $from , $to ) = @_ ;
+	
+	if ( $file eq $genome_file and $reference_fa ) {
+		$chromosome =~ m/^([\w\s\d_]+)/ ;
+		my $ch = $1 ;
+		my $cmd = "$cmd_samtools faidx $datapath/$reference_fa $ch:$from-$to |" ;
+		open FILE , $cmd ;
+		my $s ;
+		while ( <FILE> ) {
+			next if $_ =~ /^>/ ;
+			chomp ;
+			$s .= uc $_ ;
+		}
+		close FILE ;
+		return $s ;
+	}
+	
+	# Default / fallback
 	my $s = get_chromosome_from_genome_file ( $file , $chromosome ) ;
 	return $s if $s eq '' ;
 	$s = substr $s , $from - 1 , $to - $from + 1 ;
