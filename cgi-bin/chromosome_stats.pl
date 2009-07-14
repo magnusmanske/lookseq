@@ -50,7 +50,7 @@ if ( $reference_fa ) { # Use SAMTOOLS .fa file
 	open FILE , $fai_file or die("$fai_file: $!");
 	while ( <FILE> )
 	{
-		die "Unexpected format of $genome_fai_file: $_\n" if $_ !~ /^(\S+)\s+(\d+)\s+/ ;
+		die "Unexpected format of $fai_file: $_\n" if $_ !~ /^(\S+)\s+(\d+)\s+/ ;
 		my ( $chrom , $length ) = ( $1 , $2 ) ;
 		next if $chrom !~ /^(?:\d+|x|y)$/i ;
 		$chromosomes{$chrom} = $length;
