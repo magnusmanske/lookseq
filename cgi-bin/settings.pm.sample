@@ -16,6 +16,7 @@ our @EXPORT = qw(
 	$cgi_path $annotation_file $snp_file $robots_flag $use_db_index_cutoff $uniqueness_file 
 	$use_sanger_cache $use_sanger_layout
 	$use_mysql $mysql_server $mysql_port $mysql_user $mysql_password @mysql_dbs
+	%lscolor $ls_max_lines
 );
 
 # Tool title
@@ -70,5 +71,24 @@ $use_db_index_cutoff = 20000 ;
 # Sanger-specific flags; don't change unless you know what you're doing
 our $use_sanger_layout = 0 ;
 our $use_sanger_cache = 0 ;
+
+# Colors
+our %lscolor ;
+$lscolor{'black'} = [ 0x00 , 0x00 , 0x00 ] ;
+$lscolor{'white'} = [ 0xFF , 0xFF , 0xFF ] ;
+$lscolor{'red'} = [ 0xFF , 0x00 , 0x00 ] ;
+$lscolor{'blue'} = [ 0x00 , 0x00 , 0xFF ] ;
+$lscolor{'ltblue'} = [ 0x44 , 0xB4 , 0xD5 ] ;
+$lscolor{'green'} = [ 0x00 , 0xFF , 0x00 ] ;
+$lscolor{'green2'} = [ 0x00 , 0x80 , 0x00 ] ;
+$lscolor{'ltgreen'} = [ 0x72 , 0xFE , 0x95 ] ;
+$lscolor{'yellow'} = [ 0xED , 0xEF , 0x85 ] ;
+$lscolor{'ltgrey'} = [ 0xDC , 0xDC , 0xDC ] ;
+$lscolor{'grey'} = [ 0xC8 , 0xC8 , 0xC8 ] ;
+$lscolor{'brown'} = [ 0xD2 , 0x69 , 0x1E ] ; # Inversion
+$lscolor{'cyan'} = [ 0x44 , 0xB4 , 0xD5 ] ; # Cigar
+
+# Upper SNP display limit for SAM format; set for max number of lines, e.g. 50000
+our $ls_max_lines ;
 
 1 ;
