@@ -14,7 +14,7 @@ use GD ;
 use Time::HiRes qw( usleep ualarm gettimeofday tv_interval nanosleep );
 use settings ;
 use Data::Dumper ;
- use LWP::Simple;
+use LWP::Simple;
 
 my $cgi = new CGI;
 my $time0 = [gettimeofday()];
@@ -586,14 +586,14 @@ sub dump_image_pileupview {
 	}
 
 	my $im = new GD::Image ( $width , $height + 20 ) ;
-	my $white = $im->colorAllocate ( 255 , 255 , 255 ) ;
-	my $black = $im->colorAllocate ( 0 , 0 , 0 ) ;
-	my $blue = $im->colorAllocate ( 0 , 0 , 255 ) ;
-	my $single_color = $im->colorAllocate ( 0 , 128 , 0 ) ;
-	my $inversion_color = $im->colorAllocate ( 210 , 105 , 30 ) ;
-	my $cigar_color = $im->colorAllocate ( 0x44 , 0xB4 , 0xD5 ) ;
-	my $red = $im->colorAllocate ( 255 , 0 , 0 ) ;
-	my $ltgrey = $im->colorAllocate ( 220 , 220 , 220 ) ;
+	my $white = $im->colorAllocate ( @{$lscolor{'white'}} ) ;
+	my $black = $im->colorAllocate ( @{$lscolor{'black'}} ) ;
+	my $blue = $im->colorAllocate ( @{$lscolor{'blue'}} ) ;
+	my $single_color = $im->colorAllocate ( @{$lscolor{'green2'}} ) ;
+	my $inversion_color = $im->colorAllocate ( @{$lscolor{'brown'}} ) ;
+	my $cigar_color = $im->colorAllocate ( @{$lscolor{'cyan'}} ) ;
+	my $red = $im->colorAllocate ( @{$lscolor{'red'}} ) ;
+	my $ltgrey = $im->colorAllocate ( @{$lscolor{'ltgrey'}} ) ;
 	
 	my $nob = $#bands ;
 	
@@ -867,19 +867,29 @@ sub add_coverage {
 }
 
 sub add_coverage_sam_single {
-	my ( $r ) = @_ ;
-	my $start = $r->[2] - $from ;
-	my $end = $start + length $r->[8] ;
-	$start = 1 if $start < 1 ;
-	$coverage[$_]++ foreach ( $start .. $end ) ;
+	my ( $from, $to, $r ) = @_ ;
+
+	my $start = $r->[2];
+	my $end   = $start + length $r->[8];
+	if ( $end > $to ) { $end = $to; }
+
+	my $ifrom = $start - $from;
+	if ( $ifrom < 0 ) { $ifrom = 1; }   # not sure why the indexing was from 1 and not from 0?
+
+	my $ito = $end - $from;
+	if ( $ito > $to-$from+1 ) { $ito=$to-$from+1; }
+
+	for (my $i=$ifrom; $i<=$ito; $i++) {
+		$coverage[$i]++;
+	}
 }
 
 sub add_coverage_sam {
-	my ( $data , $single ) = ( @_ , 0 ) ;
+	my ( $from, $to, $data , $single ) = ( @_ , 0 ) ;
 	foreach ( @{$data} ) {
 		my $d = $sam_reads{$_} ;
-		add_coverage_sam_single ( $d->[0] ) ;
-		add_coverage_sam_single ( $d->[1] ) unless $single ;
+		add_coverage_sam_single ($from, $to, $d->[0] ) ;
+		add_coverage_sam_single ($from, $to, $d->[1] ) unless $single ;
 	}
 }
 
@@ -917,10 +927,10 @@ sub dump_image_coverageview {
 	}
 	
 	if ( $using_bam ) {
-		add_coverage_sam ( \@sam_perfect ) ;
-		add_coverage_sam ( \@sam_snps ) ;
-		add_coverage_sam ( \@sam_inversions ) ;
-		add_coverage_sam ( \@sam_single , 1 ) ;
+		add_coverage_sam ( $from , $to , \@sam_perfect ) ;
+		add_coverage_sam ( $from , $to , \@sam_snps ) ;
+		add_coverage_sam ( $from , $to , \@sam_inversions ) ;
+		add_coverage_sam ( $from , $to , \@sam_single , 1 ) ;
 	}
 
 	$height = 0 ;
@@ -956,19 +966,20 @@ sub dump_image_coverageview {
 #		exit ;
 	}
 
+	$height += 1 unless $height ;
 	$height += $scale_height ; # Scale
 	
 	my $im = new GD::Image ( $width , $height ) ;
-	my $white = $im->colorAllocate ( 255 , 255 , 255 ) ;
-	my $black = $im->colorAllocate ( 0 , 0 , 0 ) ;
+	my $white = $im->colorAllocate ( @{$lscolor{'white'}} ) ;
+	my $black = $im->colorAllocate ( @{$lscolor{'black'}} ) ;
 	
 	my ( $col , $col2 , $col3 ) ;
 	if ( $second ) {
-		$col = $im->colorAllocate ( 0x44 , 0xB4 , 0xD5  ) ; # Blue
-		$col2 = $im->colorAllocate ( 0x72 , 0xFE , 0x95  ) ; # Green
-		$col3 = $im->colorAllocate ( 0xED , 0xEF , 0x85 ) ; # Yellow
+		$col = $im->colorAllocate ( @{$lscolor{'ltblue'}} ) ;
+		$col2 = $im->colorAllocate ( @{$lscolor{'ltgreen'}} ) ;
+		$col3 = $im->colorAllocate ( @{$lscolor{'yellow'}} ) ;
 	} else {	
-		$col = $im->colorAllocate ( 0 , 0 , 255  ) ;
+		$col = $im->colorAllocate ( @{$lscolor{'blue'}}  ) ;
 	}
 
 	my @max_per_pixel ;
@@ -1064,19 +1075,19 @@ sub dump_image_indelview {
 	$max_dist = 1 ; # Dummy value
 
 	$im = new GD::Image ( $width , $height ) ;
-	my $white = $im->colorAllocate ( 255 , 255 , 255 ) ;
-	my $black = $im->colorAllocate ( 0 , 0 , 0 ) ;
-	my $blue = $im->colorAllocate ( 0 , 0 , 255 ) ;
-	my $light_blue = $im->colorAllocate ( 0x44 , 0xB4 , 0xD5 ) ;
-	my $red = $im->colorAllocate ( 255 , 0 , 0 ) ;
-	my $single_color = $im->colorAllocate ( 0 , 128 , 0 ) ;
-	my $inversion_color = $im->colorAllocate ( 0xD2 , 0x69 , 0x1E ) ; # D2691E
+	my $white = $im->colorAllocate ( @{$lscolor{'white'}} ) ;
+	my $black = $im->colorAllocate ( @{$lscolor{'black'}} ) ;
+	my $blue = $im->colorAllocate ( @{$lscolor{'blue'}} ) ;
+	my $light_blue = $im->colorAllocate ( @{$lscolor{'ltblue'}} ) ;
+	my $red = $im->colorAllocate ( @{$lscolor{'red'}} ) ;
+	my $single_color = $im->colorAllocate ( @{$lscolor{'green2'}} ) ;
+	my $inversion_color = $im->colorAllocate ( @{$lscolor{'brown'}} ) ;
 	my $variance_color = $im->colorAllocate ( 0xFF , 0xF6 , 0x8F ) ; # FFF68F
 	my $inversion_left_color = $im->colorAllocate ( 0xB6 , 0xBA , 0x18 ) ; # B6BA18
 	my $inversion_right_color = $im->colorAllocate ( 0x7C , 0xEB , 0x98 ) ; # 7CEB98
 	my $inversion_middle_color = $im->colorAllocate ( 0x99 , 0xD2 , 0x58 ) ; # 99D258
 	my $orange = $im->colorAllocate ( 0xFF , 0xAA , 0x00 ) ;
-	my $grey = $im->colorAllocate ( 200 , 200 , 200 ) ;
+	my $grey = $im->colorAllocate ( @{$lscolor{'grey'}} ) ;
 
 
 	
@@ -1604,12 +1615,12 @@ sub dump_image_annotation {
 	my $ft = $to - $from + 1 ;
 	$height = 20 ;
 	my $im = new GD::Image ( $width , $height ) ;
-	my $white = $im->colorAllocate ( 255 , 255 , 255 ) ;
-	my $black = $im->colorAllocate ( 0 , 0 , 0 ) ;
-	my $blue = $im->colorAllocate ( 0 , 0 , 255 ) ;
-	my $red = $im->colorAllocate ( 255 , 0 , 0 ) ;
-	my $green = $im->colorAllocate ( 0 , 255 , 0 ) ;
-	my $gray = $im->colorAllocate ( 200 , 200 , 200 ) ;
+	my $white = $im->colorAllocate ( @{$lscolor{'white'}} ) ;
+	my $black = $im->colorAllocate ( @{$lscolor{'black'}} ) ;
+	my $blue = $im->colorAllocate ( @{$lscolor{'blue'}} ) ;
+	my $red = $im->colorAllocate ( @{$lscolor{'red'}} ) ;
+	my $green = $im->colorAllocate ( @{$lscolor{'green'}} ) ;
+	my $gray = $im->colorAllocate ( @{$lscolor{'grey'}} ) ;
 
 	#print $cgi->header(-type=>'text/plain',-expires=>'-1s');
 	my $features = [] ;
@@ -1779,10 +1790,10 @@ sub dump_image_gc {
 
 	$height = 50 ;
 	my $im = new GD::Image ( $width , $height ) ;
-	my $white = $im->colorAllocate ( 255 , 255 , 255 ) ;
-	my $black = $im->colorAllocate ( 0 , 0 , 0 ) ;
-	my $blue = $im->colorAllocate ( 0 , 0 , 255 ) ;
-	my $red = $im->colorAllocate ( 255 , 0 , 0 ) ;
+	my $white = $im->colorAllocate ( @{$lscolor{'white'}} ) ;
+	my $black = $im->colorAllocate ( @{$lscolor{'black'}} ) ;
+	my $blue = $im->colorAllocate ( @{$lscolor{'blue'}} ) ;
+	my $red = $im->colorAllocate ( @{$lscolor{'red'}} ) ;
 
 	$im->line ( 0 , $height/2 , $width , $height/2 , $red ) ;
 	
@@ -1896,28 +1907,17 @@ sub sam_read_data {
 	$ENV{'PATH'} = $1;
 	
 #	print $cgi->header(-type=>'text/plain',-expires=>'-1s'); # For debugging output
-	open PIPE , "$cmd |" ;
+	my $nlines=0;
+	open PIPE , "$cmd 2>&1 |" or die "$cmd |: $!";
 	while ( <PIPE> ) {
-		$_ =~ /^(\S+)\s(.+)+$/ ;
-		my @a = split "\t" , $2 ;
-#		next if ( $a[0] & 0x0008 ) > 0 ;
-#		next unless $display_single or $a[0] & 0x0002 ; # Don't load single reads unless we display them
-=cut
-		my $single ;
-		if ( ( $a[0] & 0x0001 ) > 0 ) {
-			$single = 1 if ( $a[0] & 0x0008 ) > 0 ;
-		} else {
-			$single = 1 ;
-		}
-
-		if ( $single ) {
-			print $a[0] . "\t" . $a[2] . "\n" ;
-		}
-=cut
-		push @{$sam_reads{$1}} , \@a ;
+		$_ =~ /^(\S+)\s/ ;
+		my $id = $1;
+		my @a = split "\t" , $';
+		push @{$sam_reads{$id}} , \@a;
+		$nlines++;
 	}
 	close PIPE ;
-#	exit ;
+	if ( defined $ls_max_lines and $nlines > $ls_max_lines ) { $display_snps = 0; }
 }
 
 
@@ -1964,6 +1964,43 @@ sub sam_bin {
 
 
 sub sam_check4snps {
+	if ( !$display_snps ) { return 0; }
+
+	my ($r) = @_;
+	my $seq_start = $r->[2];
+	my $seq       = $r->[8];
+	my $seq_len   = length($seq);
+	my $seq_end   = $seq_start + $seq_len - 1;
+
+	my $iseq_offset = 0;
+	my $iref_offset = 0;
+	if ( $seq_start < $from ) { $iseq_offset = $from - $seq_start; }
+	elsif ( $seq_start > $from ) { $iref_offset = $seq_start - $from; }
+
+	my $ref_len = $to - $from + 1;
+
+	my $iseq = $iseq_offset;
+	my $iref = $iref_offset;
+
+	my $mismatches = 0;
+	while ( $iseq<$seq_len && $iref<$ref_len ) {
+		my $ref = substr($refseq,$iref,1);
+		my $snp = substr($seq,$iseq,1);
+
+		if ( $ref ne $snp ) {
+			substr($r->[8], $iseq, 1) = lc($snp);
+			$mismatches++;
+		}
+
+		$iseq++;
+		$iref++;
+	}
+
+	return $mismatches ;
+}
+
+=cut
+sub sam_check4snps_old {
 	my ( $r ) = @_ ;
 	my $seq = $r->[8] ;
 	my $pos = $r->[2] ;
@@ -1993,6 +2030,7 @@ sub sam_check4snps {
 
 	return $mismatches ;
 }
+=cut
 
 sub sam_get_y {
 	my ( $r ) = @_ ;
