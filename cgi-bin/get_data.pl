@@ -1769,6 +1769,84 @@ sub dump_image_annotation {
 	write_png ( $im ) ;
 }
 
+
+sub dump_image_deletions {
+	$height = 50 ;
+	my $im = new GD::Image ( $width , $height ) ;
+	my $white = $im->colorAllocate ( @{$lscolor{'white'}} ) ;
+	my $black = $im->colorAllocate ( @{$lscolor{'black'}} ) ;
+	my $blue = $im->colorAllocate ( @{$lscolor{'ltblue'}} ) ;
+	my $yellow = $im->colorAllocate ( @{$lscolor{'yellow'}} ) ;
+	my $green = $im->colorAllocate ( @{$lscolor{'ltgreen'}} ) ;
+	my $grey = $im->colorAllocate ( @{$lscolor{'grey'}} ) ;
+	
+	my $ft = $to - $from + 1 ;
+	my $max_del_width = 10000 ;
+	my ( @left , @right , @center ) ;
+	
+	if ( $number_of_databases == 0 ) {
+		write_png ( $im ) ;
+		return ;
+	}
+	
+	foreach my $current_db ( 0 .. $number_of_databases - 1 ) {
+		my %meta = %{$all_meta[$current_db]} ;
+		next if ( $meta{'fragment'} || 0 ) < 1 ;
+		my $upper = $meta{'fragment'}+$meta{'variance'} ;
+		my $lower = $meta{'fragment'}-$meta{'variance'} ;
+		my $fs_expected = $meta{'fragment'} ;
+		my $rl = $meta{'read_length'} ;
+#		$avg_frag_size = $meta{'fragment'} || 0 ;
+#		next if $avg_frag_size == 0 ;
+		foreach ( @{$all_pmr[$current_db]} , @{$all_smr[$current_db]} ) {
+			my ( $rl1 , $rl2 ) = ( $_->[scalar(@{$_})-2] , $_->[scalar(@{$_})-1] ) ;
+			my $p1 = $_->[1] ;
+			my $p2 = $_->[2] ;
+			my $ofs = $p2 - $p1 + $rl2 ; # Observed fragment size
+			next if $ofs <= $upper + 20 ;#and $ofs >= $lower ; # INSERTIONS MISSING!!
+			next if $ofs > $max_del_width ;
+			my $est_var = int ( ( $ofs - $fs_expected ) / 2 ) ;
+			my $c = int ( $p1 + $ofs/2 ) ;
+			foreach ( $c - $est_var .. $c + $est_var ) {
+				$center[$_]++ ;
+			}
+			foreach ( $p1 .. $p1 + $rl1 ) {
+				$left[$_]++ ;
+			}
+			foreach ( $p2 .. $p2 + $rl2 ) {
+				$right[$_]++ ;
+			}
+#			$center[int(($p1+$p2+$rl2)/2)]++ ;
+		}
+	}
+	
+	my $max = 0 ;
+	foreach my $pos ( $from ... $to ) {
+		$max = $center[$pos] if ( ($center[$pos]||0)) > $max ;
+	}
+	my $factor = ($height-1) / $max ;
+#	$factor = 1 ;
+	foreach my $pos ( $from ... $to ) {
+		my $x = int ( ( $pos - $from ) * $width / $ft ) ;
+		my $y = $height - 1 ;
+		$im->line ( $x , $y , $x , $y - $center[$pos]*$factor , $green ) if $center[$pos] ;
+		$im->line ( $x , $y , $x , $y - $left[$pos]*$factor , $blue ) if $left[$pos] ;
+		$im->line ( $x , $y , $x , $y - $right[$pos]*$factor , $yellow ) if $right[$pos] ;
+	}
+	
+	my $legend_color = $black ;
+	my @steps = ( 1000 , 500 , 250 , 100 , 50 , 25 , 10 , 5 ) ;
+	shift @steps while 1 < scalar @steps and $steps[0] * 5 > $max ;
+	for ( my $a = $steps[0] ; $a <= $max ; $a += $steps[0] ) {
+		my $y = $height - $a * $factor ;
+		$im->line ( 0 , $y , 5 , $y , $legend_color ) ;
+		$im->string ( gdSmallFont , 10 , $y-5 , $a , $legend_color ) ;
+	}
+	$im->string ( gdSmallFont , 40 , 0 , "[reads]" , $legend_color ) ;
+
+	write_png ( $im ) ;
+}
+
 sub dump_image_gc {
 	my $range = 1+11*2 ;
 	my $from2 = $from - $range ;
@@ -2216,6 +2294,8 @@ if ( $output eq 'image' ) {
 		dump_image_annotation ( 0 ) ;
 	} elsif ( $view eq 'gc' ) {
 		&dump_image_gc ;
+	} elsif ( $view eq 'deletions' ) {
+		&dump_image_deletions ;
 	}
 } elsif ( $output eq 'url' ) {
 	if ( $view eq 'annotation' ) {

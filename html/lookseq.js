@@ -391,6 +391,7 @@ function update_image () {
 	document.getElementById("legend_gc").style.display = document.getElementById('display_gc').checked ? 'block' : 'none' ;
 	document.getElementById("legend_inv").style.display = document.getElementById('display_inversions_ext').checked ? 'block' : 'none' ;
 	document.getElementById("legend_coverage_two_samples").style.display = document.getElementById('display_coverage').checked && document.getElementById('display_second_track').checked ? 'block' : 'none' ;
+	document.getElementById("legend_deletions").style.display = document.getElementById('display_deletions').checked ? 'block' : 'none' ;
 	
 	
 	document.getElementById("display_pair_links").disabled = display_mode != 'indel' && display_mode != 'paired_pileup' ;
@@ -409,6 +410,7 @@ function update_image () {
 	var show_annotation = document.getElementById('display_annotation').checked ? 1 : 0 ;
 	var show_gc = document.getElementById('display_gc').checked ? 1 : 0 ;
 	var show_coverage = document.getElementById('display_coverage').checked ? 1 : 0 ;
+	var show_deletions = document.getElementById('display_deletions').checked ? 1 : 0 ;
 	
 	var display = '|' ;
 	display += document.getElementById('display_perfect').checked ? 'perfect|' : '' ;
@@ -423,6 +425,7 @@ function update_image () {
 	document.getElementById('annotation_image').style.display = show_annotation ? 'block' : 'none' ;
 	document.getElementById('gc_image').style.display = show_gc ? 'block' : 'none' ;
 	document.getElementById('coverage_image').style.display = show_coverage ? 'block' : 'none' ;
+	document.getElementById('deletion_image').style.display = show_deletions ? 'block' : 'none' ;
 	
 	var sel = document.getElementById("chr_list");
 
@@ -439,6 +442,7 @@ function update_image () {
 	var lanes = condense_lanes_for_url () ;
 	url += '&lane=' + lanes ;
 	var coverage_url = url + '&view=coverage&display=|noscale' + display ;
+	var deletions_url = url + '&view=deletions&display=|noscale' + display ;
 
 	var url_part2 = '' ;
 	url_part2 += '&view=' + display_mode ;
@@ -457,6 +461,7 @@ function update_image () {
 	display += show_annotation ? 'annotation|' : '' ; // Is ignored by image drawing routine, but used by update_reflink()
 	display += show_gc ? 'gc|' : '' ; // Is ignored by image drawing routine, but used by update_reflink()
 	display += show_coverage ? 'coverage|' : '' ; // Is ignored by image drawing routine, but used by update_reflink()
+	display += show_deletions ? 'deletions|' : '' ; // Is ignored by image drawing routine, but used by update_reflink()
 	update_reflink ( lanes , display ) ;
 
 	var dst = document.getElementById('display_second_track').checked ;
@@ -490,6 +495,11 @@ function update_image () {
 		setOpacity ( document.getElementById('coverage_image') , opaq ) ;
 		if ( dst ) coverage_url += "&second=" + second_track_lanes ;
 		document.getElementById('coverage_image').src = coverage_url ;
+		load++ ;
+	}
+	if ( show_deletions ) {
+		setOpacity ( document.getElementById('deletion_image') , opaq ) ;
+		document.getElementById('deletion_image').src = deletions_url ;
 		load++ ;
 	}
 	update_hbar () ;
@@ -577,6 +587,12 @@ function gc_image_loaded () {
 // Callback function for loading the coverage image.
 function coverage_image_loaded () {
 	reset_image_display ( 'coverage_image' ) ;
+	loading ( -1 ) ;
+}
+
+// Callback function for loading the deletion image.
+function deletion_image_loaded () {
+	reset_image_display ( 'deletion_image' ) ;
 	loading ( -1 ) ;
 }
 
@@ -676,6 +692,7 @@ function zoom_image ( new_from , new_to ) {
 	if ( document.getElementById('display_gc').checked ) zoom_single_image ( 'gc_image' , img_width * dfrom / nw , img_width * ow / nw ) ;
 	if ( document.getElementById('display_annotation').checked ) zoom_single_image ( 'annotation_image' , img_width * dfrom / nw , img_width * ow / nw ) ;
 	if ( document.getElementById('display_coverage').checked ) zoom_single_image ( 'coverage_image' , img_width * dfrom / nw , img_width * ow / nw ) ;
+	if ( document.getElementById('display_deletions').checked ) zoom_single_image ( 'deletion_image' , img_width * dfrom / nw , img_width * ow / nw ) ;
 }
 
 function zoom_single_image ( id , left , width ) {
@@ -727,6 +744,7 @@ function mouse_moved_over_main_image ( event ) {
 	h += document.getElementById('display_annotation').checked ? 2+document.getElementById('annotation_image').clientHeight : 0 ;
 	h += document.getElementById('display_gc').checked ? 2+document.getElementById('gc_image').clientHeight : 0 ;
 	h += document.getElementById('display_coverage').checked ? 2+document.getElementById('coverage_image').clientHeight : 0 ;
+	h += document.getElementById('display_deletions').checked ? 2+document.getElementById('deletion_image').clientHeight : 0 ;
 
 	var vruler = document.getElementById('vruler') ;
 	vruler.style.height = h + "px" ;
@@ -864,6 +882,7 @@ function initialize_display () {
 	document.getElementById('display_annotation').checked	= b['annotation'] ? true : false ;
 	document.getElementById('display_gc').checked			= b['gc'] ? true : false ;
 	document.getElementById('display_coverage').checked		= b['coverage'] ? true : false ;
+	document.getElementById('display_deletions').checked	= b['deletions'] ? true : false ;
 	
 	if ( indel_zoom != 'auto' ) document.getElementById('indel_zoom').value = indel_zoom ;
 }
@@ -1231,6 +1250,7 @@ function movemouse(e)
     document.getElementById('annotation_image').style.left = newx + "px" ;
     document.getElementById('gc_image').style.left = newx + "px" ;
     document.getElementById('coverage_image').style.left = newx + "px" ;
+    document.getElementById('deletion_image').style.left = newx + "px" ;
 
 	var md = document.getElementById ( 'mini_data' ) ;
 	removeChildrenFromNode ( md ) ;

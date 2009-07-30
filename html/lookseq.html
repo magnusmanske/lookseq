@@ -74,6 +74,7 @@ InDel size
 <span style='margin-right:3px'><input type='checkbox' id='display_annotation' onclick="update_image()" checked="checked"/><label for="display_annotation">%OPT_ANN%</label></span>
 <span style='margin-right:3px'><input type='checkbox' id='display_gc' onclick="update_image()" /><label for="display_gc">%OPT_GC%</label></span>
 <span style='margin-right:3px'><input type='checkbox' id='display_coverage' onclick="update_image()" /><label for="display_coverage">%CB_COVERAGE%</label></span>
+<span style='margin-right:3px'><input type='checkbox' id='display_deletions' onclick="update_image()" /><label for="display_deletions">%CB_DELETIONS%</label></span>
 <span style='margin-right:3px'>
 <input id='search_query' name='search_query' type='text' value='' size='10' />
 <input type='button' value='%BUTTON_SEARCH%' onclick='on_search()' />
@@ -89,6 +90,7 @@ InDel size
 <img id='annotation_image' onload='annotation_image_loaded()' class='dragme' onmouseout='hide_vruler()'  onmousemove='mouse_moved_over_main_image(event)' ondblclick='annotation_clicked(event)' style='position:relative;margin-top:2px' alt='' src='' />
 <img id='gc_image' onload='gc_image_loaded()' class='dragme' onmouseout='hide_vruler()'  onmousemove='mouse_moved_over_main_image(event)' ondblclick='main_image_clicked(event)' style='position:relative;margin-top:2px' alt='' src='' />
 <img id='coverage_image' onload='coverage_image_loaded()' class='dragme' onmouseout='hide_vruler()'  onmousemove='mouse_moved_over_main_image(event)' ondblclick='main_image_clicked(event)' style='position:relative;margin-top:2px' alt='' src='' />
+<img id='deletion_image' onload='deletion_image_loaded()' class='dragme' onmouseout='hide_vruler()'  onmousemove='mouse_moved_over_main_image(event)' ondblclick='main_image_clicked(event)' style='position:relative;margin-top:2px' alt='' src='' />
 <div id='hbar' style='display:none;position:relative'>
 <div id='dragbar' style='position:relative;background-color:#FFFFFF;border-left:2px solid #DDDDDD;border-top:2px solid #DDDDDD;border-right:2px solid #444444;border-bottom:2px solid #444444;'></div>
 </div>
@@ -141,6 +143,11 @@ InDel size
 <span style="border-left:3px solid #44B4D5; margin-right:5px; padding-left:1px">%LEG_COV2_TOP%</span>
 <span style="border-left:3px solid #72FE95; margin-right:5px; padding-left:1px">%LEG_COV2_BOT%</span>
 <span style="border-left:3px solid #EDEF85; margin-right:5px; padding-left:1px">%LEG_COV2_BOTH%</span>
+</div>
+<div style='display:none' id='legend_deletions'>%LEG_DEL% 
+<span style="border-left:3px solid #44B4D5; margin-right:5px; padding-left:1px">%LEG_DEL_LEFT%</span>
+<span style="border-left:3px solid #72FE95; margin-right:5px; padding-left:1px">%LEG_DEL_MID%</span>
+<span style="border-left:3px solid #EDEF85; margin-right:5px; padding-left:1px">%LEG_DEL_RIGHT%</span>
 </div>
 <div style='font-size:8pt'>%REFLINK%
 <div id='ie_warning' style='display:none;font-size:7pt;font-style:italic;'></div>

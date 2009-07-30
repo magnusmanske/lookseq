@@ -75,9 +75,14 @@ leg_cov2	Comparative coverage :
 leg_cov2_top	Top sample
 leg_cov2_bot	Bottom sample
 leg_cov2_both	Joined coverage
+leg_del	Deletions :
+leg_del_left	Left boundary
+leg_del_mid	Deleted area
+leg_del_right	Right boundary
 
 helper_displays	Also
 cb_coverage	Coverage
+cb_deletions	Deletions
 cb_second_track	Secondary track
 cb_squeeze_tracks	Squeeze tracks
 
