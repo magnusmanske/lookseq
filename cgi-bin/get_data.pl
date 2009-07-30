@@ -1824,6 +1824,10 @@ sub dump_image_deletions {
 	foreach my $pos ( $from ... $to ) {
 		$max = $center[$pos] if ( ($center[$pos]||0)) > $max ;
 	}
+	if ( $max == 0 ) {
+		write_png ( $im ) ;
+		return ;
+	}
 	my $factor = ($height-1) / $max ;
 #	$factor = 1 ;
 	foreach my $pos ( $from ... $to ) {
