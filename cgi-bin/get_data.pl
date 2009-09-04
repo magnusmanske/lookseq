@@ -1,28 +1,42 @@
 #!/usr/local/bin/perl -T
 #########
-# Author:     Magnus Manske (mm6@sanger.ac.uk)
-# Group:      Team 112
+# Author:     Magnus Manske (mm6@sanger.ac.uk)  Team 112
+#             Petr Danecek pd3@sanger.ac.uk     Team 145
 #
 
-BEGIN { push @INC, "."; }
+my $DEBUG = 0;
+if ( $DEBUG )
+{
+    # Run e.g. as get_data.pl from=95503225 to=95503325 chr=2 output=image width=700 lane=129S1_SvImJ.bam view=indel display='|perfect|snps|inversions|pairlinks|potsnps|uniqueness|gc|coverage|'
+    BEGIN { push @INC, "/software/varinf/lib/", '.'; }
+}
+else
+{
+    BEGIN { push @INC, "."; }
+}
 
 use strict ;
 use CGI;
 use CGI::Carp qw(fatalsToBrowser);
 use DBI;
 use GD ;
-use Time::HiRes qw( usleep ualarm gettimeofday tv_interval nanosleep );
+use Time::HiRes qw(gettimeofday tv_interval);
 use settings ;
 use Data::Dumper ;
 use LWP::Simple;
+use Digest::MD5 qw(md5);
 
 my $cgi = new CGI;
-my $time0 = [gettimeofday()];
+my $time0 = [gettimeofday];
 my $debug_output = 0 ;
 $debug_output = $cgi->param('debug') if defined $cgi->param('debug') ;
 if ( $debug_output ) {
 	use warnings ;
 }
+
+#print STDERR "get_data.pl: " . CGI::url(-query=>1) ."\n";
+
+$ENV{PATH}= '/usr/local/bin';   # solely to stop taint from barfing
 
 # Parameters
 my $output = $cgi->param('output') || 'text' ;
@@ -34,23 +48,36 @@ my $chromosome = $cgi->param('chr') ;
 my $width = $cgi->param('width') || 1024 ;
 my $height = $cgi->param('height') || 512 ;
 my $display = $cgi->param('display') || '|perfect|snps|inversions|' ;
+my $mapq_cutoff = $cgi->param('mapq') ? $cgi->param('mapq') : 0;
+my $sam_show_read_arrows = $cgi->param('arrows') ? 1 : 0;
+if ( !($mapq_cutoff=~/^\d+$/) ) { $mapq_cutoff=0; }
+my $max_insert_size = $cgi->param('maxdist') ? $cgi->param('maxdist') : 'Auto';
+$max_insert_size =~ /(\d+)/; $max_insert_size=$1;
 
 $from =~ /(\d+)/ ; $from = $1 ;
 $to =~ /(\d+)/ ; $to = $1 ;
 
 # Sanger cache - others, ignore
 my ( $sanger_web , $sanger_cache_db , $sanger_cache_hours , $sanger_cache_key ) ;
-if ( $use_sanger_cache and ( $to - $from > 500000 ) ) { # Only for large displays
+if ( $use_sanger_cache && !$DEBUG ) 
+{ 
 	use SangerPaths qw(core);
 	use SangerWeb;
 	$sanger_web = SangerWeb->new();
 	$sanger_cache_db = $sanger_web->dbstore();
-	$sanger_cache_hours = 24 * 10 ;
-	$sanger_cache_key = "LookSeq/" . CGI::url(-query=>1) ;
+	$sanger_cache_hours = 1;
+    # The key is too long in this form and the sanger cache truncates it. In result,
+    # no caching is done.
+	#   $sanger_cache_key = "LookSeq/" . CGI::url(-query=>1) ;
+    $sanger_cache_key = $use_sanger_cache 
+        . join('-',$view,$database,$from,$to,$chromosome,$width,$height,$max_insert_size)
+        . md5(CGI::url(-query=>1)); 
 
 	my $data = $sanger_cache_db->get ( $sanger_cache_key ) ;
 	
-	if ( 0 < length $data ) {
+	if ( 0 < length $data && !$cgi->param('clean') ) {
+        $sanger_cache_db->refresh($sanger_cache_key, $sanger_cache_hours);
+        #print STDERR "get_data.pl: getting from cache .. $sanger_cache_key\n";
 		if ( $output eq 'text' ) {
 			print $sanger_web->cgi()->header(-type=>'text/plain',-expires=>'-1s');
 		} else {
@@ -60,7 +87,6 @@ if ( $use_sanger_cache and ( $to - $from > 500000 ) ) { # Only for large display
 		print $data ;
 		exit ;
 	}
-
 }
 
 my $display_perfect = $display =~ m/\|perfect\|/ ;
@@ -74,6 +100,14 @@ my $display_noscale = $display =~ m/\|noscale\|/ ;
 my $display_uniqueness = $display =~ m/\|uniqueness\|/ ;
 my $display_inline_annotation = 1 ; # FIXME
 
+my $MODE_SINGLE       = 1;
+my $MODE_DELETION     = 4;
+my $MODE_INSERTION    = 5;
+my $MODE_MAPQUAL_ZERO = 6;
+my $height_nonzero_isize   = 0;
+my $height_zero_isize  = 0;
+my $max_pileup_rows = 100;   # In the pileup view, print only this many rows.
+
 $display_inversions_ext = 0 unless $display_inversions ;
 
 # Parameter paranoia
@@ -86,7 +120,10 @@ my $orig_chr = $chromosome ;
 unless ( $view eq 'annotation' or $view eq 'gc' ) {
 	die "ERROR\nNot a valid lane\n" if $database eq '' ;
 }
-die "ERROR\nTO not larger than FROM\n" if $from >= $to ;
+if ( $from >= $to )
+{
+    die "ERROR\nTO not larger than FROM .. from=" .$cgi->param('from'). " to=" .$cgi->param('to'). " \n" ;
+}
 
 my @all_smr ;
 my @all_pmr ;
@@ -121,14 +158,22 @@ my $ft ;
 # SAM/BAM variables
 my $using_bam = 0 ;
 my $cmd_samtools = "$execpath/samtools" ;
-my $sam_show_read_arrows = 0 ;
+#$cmd_samtools = "/nfs/sf8/G1K/bin/samtools" unless !$DEBUG;
 my $sam_show_read_quality = 0 ;
 my %sam_reads ;
-my ( @sam_single , @sam_perfect , @sam_snps , @sam_inversions , @sam_capillary ) ;
+my ( @sam_single , @sam_perfect , @sam_snps , @sam_inversions , @sam_capillary, @sam_mapqual_zero, @sam_mapqual_zero_pair, @sam_perfect_singles ) ;
 my $sam_max_found_fragment = 0 ;
 my $im ;
 my ( $sam_white , $sam_black , $sam_col_single_read , $sam_col_mismatch , $sam_col_matching_read , $sam_col_inversion , $sam_col_read_pair_connection ) ;
-my ( $sam_col_read_pair_quality , $sam_col_single_read_quality ) ;
+my ( $sam_col_read_pair_quality , $sam_col_single_read_quality, $sam_col_mapqual_zero ) ;
+
+if ( $view eq 'gc' ) 
+{
+    # Do not call samtools and parse the region when only the reference sequence is used for this.
+    &dump_image_gc;
+    exit;
+}
+
 
 
 
@@ -179,7 +224,29 @@ foreach ( @databases ) {
 
 	if ( $_ =~ /.bam$/ ) {
 		$_ =~ /([a-zA-Z0-9_\-\.]+)/ ;
-		sam_read_data ( "$datapath/$1" ) ;
+        my $file = $1;
+        my $cwd;
+        if ( $bam_ftp )
+        {
+            # Samtools require chdir to read bam .bai index files.
+            $cwd = `/bin/pwd`;
+            chomp($cwd);
+            $cwd =~ /(.*)/;
+            $cwd = $1;
+            $datapath =~ /(.*)/;
+            $datapath = $1;
+            chdir($datapath) or die "Could not chdir $datapath: $!";
+            $file = "$bam_ftp/$file";
+        }
+        else
+        {
+            $file = "$datapath/$file";
+        }
+        sam_read_data($file);
+        if ( $bam_ftp )
+        {
+            chdir($cwd) or die "Could not chdir $cwd: $!";
+        }
 		$using_bam = 1 ;
 		next ;
 	}
@@ -328,9 +395,8 @@ foreach ( @databases ) {
 	push @all_meta , \%meta ;
 }
 
-if ( $using_bam ) {
-	$refseq = get_chromosome_part ( $genome_file , $orig_chr , $from , $to ) ;
-	$reflength = length $refseq ;
+if ( $using_bam ) 
+{
 	&sam_bin ;
 }
 
@@ -394,10 +460,29 @@ sub get_chromosome_from_genome_file {
 sub get_chromosome_part {
 	my ( $file , $chromosome , $from , $to ) = @_ ;
 	
-	if ( $file eq $genome_file and $reference_fa ) {
-		$chromosome =~ m/^([\w\s\d_]+)/ ;
+	if ( $file eq $reference_fa ) 
+    {
+		$chromosome =~ m/^([\w\s\d_]+)/;
 		my $ch = $1 ;
-		my $cmd = "$cmd_samtools faidx $datapath/$reference_fa $ch:$from-$to |" ;
+        
+        my $cwd;
+        if ( $reference_ftp )
+        {
+            $cwd = `/bin/pwd`;
+            chomp($cwd);
+            $cwd =~ /(.*)/;
+            $cwd = $1;
+            $datapath =~ /(.*)/;
+            $datapath = $1;
+            chdir($datapath) or die "Could not chdir $datapath: $!";
+            $file = "$reference_ftp/$file";
+        }
+        else
+        {
+            $file = "$datapath/$reference_fa";
+        }
+
+		my $cmd = "$cmd_samtools faidx $file $ch:$from-$to |" ;
 		open FILE , $cmd ;
 		my $s ;
 		while ( <FILE> ) {
@@ -406,6 +491,11 @@ sub get_chromosome_part {
 			$s .= uc $_ ;
 		}
 		close FILE ;
+
+        if ( $reference_ftp )
+        {
+            chdir($cwd) or die "Could not chdir $cwd: $!";
+        }
 		return $s ;
 	}
 	
@@ -486,7 +576,11 @@ sub dump_image_pileupview {
 	my @btype ;
 	my $ft = $to - $from + 1 ;
 
-	$refseq = get_chromosome_part ( $genome_file , $orig_chr , $from , $to ) ;
+    if ( !$refseq )
+    {
+        # Make these things locally - dump_gc_image needs different range
+	    $refseq = get_chromosome_part( $genome_file , $orig_chr , $from , $to );
+    }
 	
 #	print $cgi->header(-type=>'text/plain',-expires=>'-1s') ;
 	foreach my $current_db ( 0 .. $#all_meta ) {
@@ -547,9 +641,12 @@ sub dump_image_pileupview {
 		$show_chars = $width / $ft > 4 ? 1 : 0 ;
 #	print $cgi->header(-type=>'text/plain',-expires=>'-1s'); 
 		pile2bands_sam ( \@bands , \@btype , 0 , $paired_pileup , \@sam_perfect ) ;
+		pile2bands_sam ( \@bands , \@btype , 0 , $paired_pileup , \@sam_perfect_singles ) ;
 		pile2bands_sam ( \@bands , \@btype , 0 , $paired_pileup , \@sam_snps ) ;
 		pile2bands_sam ( \@bands , \@btype , 2 , $paired_pileup , \@sam_inversions ) ;
-		pile2bands_sam ( \@bands , \@btype , 1 , $paired_pileup , \@sam_single ) ;
+		pile2bands_sam ( \@bands , \@btype , $MODE_SINGLE , $paired_pileup , \@sam_single ) ;
+		pile2bands_sam ( \@bands , \@btype , $MODE_MAPQUAL_ZERO , $paired_pileup , \@sam_mapqual_zero ) ;
+		pile2bands_sam ( \@bands , \@btype , $MODE_MAPQUAL_ZERO , $paired_pileup , \@sam_mapqual_zero_pair ) ;
 #	exit ;
 	}
 
@@ -594,6 +691,7 @@ sub dump_image_pileupview {
 	my $cigar_color = $im->colorAllocate ( @{$lscolor{'cyan'}} ) ;
 	my $red = $im->colorAllocate ( @{$lscolor{'red'}} ) ;
 	my $ltgrey = $im->colorAllocate ( @{$lscolor{'ltgrey'}} ) ;
+    my $col_mapqual_zero = $im->colorAllocate( @{$lscolor{'mapqual_zero'}} );
 	
 	my $nob = $#bands ;
 	
@@ -612,17 +710,35 @@ sub dump_image_pileupview {
 				my $type = ord ( substr ( $btype[$band] , $pos , 1 ) ) - 65 ;
 				my $dist_marker = $type >= 100 ;
 				$type -= 100 if $dist_marker ;
-				if ( $type == 1 ) {
+				my $x1 = int ( $width * $pos / $ft ) ;
+				my $y = int ( $height - ( $band + 3 ) * $charheight - 1 ) ;
+				if ( $type == $MODE_SINGLE ) 
+                {
 					$col = ( $ch eq lc $ch ) ? $single_color : $red ;
-				} elsif ( $type == 2 ) {
+				} 
+                elsif ( $type == 2 ) {
 					$col = ( $ch eq lc $ch ) ? $inversion_color : $red ;
 				} elsif ( $type == 3 ) {
 					$col = ( $ch eq lc $ch ) ? $cigar_color : $red ;
-				} else {
+                }
+                elsif ( $type==$MODE_DELETION )
+                {
+                    $col = $white;
+                    $im->filledRectangle($x1-1,$y+2,$x1+gdSmallFont->width-1,$y+$charheight+1,$red);
+				} 
+                elsif ( $type==$MODE_INSERTION )
+                {
+                    $col = $white;
+                    $im->filledRectangle($x1-1,$y+2,$x1+gdSmallFont->width-1,$y+$charheight+1,$red);
+                }
+				elsif ( $type == $MODE_MAPQUAL_ZERO ) 
+                {
+					$col = ( $ch eq lc $ch ) ? $col_mapqual_zero : $red ;
+				} 
+				else 
+                {
 					$col = ( $ch eq lc $ch ) ? $blue : $red ;
 				}
-				my $x1 = int ( $width * $pos / $ft ) ;
-				my $y = int ( $height - ( $band + 3 ) * $charheight - 1 ) ;
 				if ( $dist_marker ) {
 					$im->filledRectangle ( $x1 , $y+2 , $x1+6 , $y+11 , $ltgrey ) ;
 				}
@@ -635,6 +751,16 @@ sub dump_image_pileupview {
 				}
 			}
 		}
+        if ( $nob>$max_pileup_rows )
+        {
+            my $msg = "Output truncated, too many sequences in this view.";
+            my $w = length($msg)*gdMediumBoldFont->width;
+            my $h = gdMediumBoldFont->height;
+            my $x = ($width - $w)*0.5;
+            my $y = 1;
+            $im->filledRectangle($x,$y,$x+$w+1,$y+$h+1,$red);
+            $im->string(gdMediumBoldFont, $x,$y, $msg,$white);
+        }
 	} else {
 		foreach my $band ( 0 .. $nob ) {
 			$bands[$band] =~ s/\s+$// ; # Trim trailing space
@@ -703,35 +829,176 @@ sub dump_image_pileupview {
 	write_png ( $im ) ;
 }
 
-sub pile2bands_sam {
-	my ( $r_bands , $r_btype , $mode , $paired_pileup , $data ) = @_ ;
-	my $single = $mode == 1 ;
-	
-	foreach ( @{$data} ) {
-		my $r = $sam_reads{$_} ;
-		my $from1 = $r->[0]->[2] ;
-		my $from2 = $single ? undef : $r->[1]->[2] ;
-		
-#			my $end = $start + length $r->[8] ;
-		my $rl1 = length $r->[0]->[8] ;
-		my $rl2 = $single ? 0 : length $r->[1]->[8] ;
-		my $dist = $from2 - $from1 + 1 + $rl2 ;
 
-		if ( $paired_pileup and not $single ) {
-			my $between = $from2 - $from1 - $rl1 ;
-			my $seq = lc $r->[0]->[8] ;
-			$seq .= '_' x $between ;
-			$seq .= lc $r->[1]->[8] ;
-			add_pileup ( $from1 , $seq , length $seq , $r_bands , $r_btype , $mode , $dist , 1 ) ;
-		} else {
-			if ( $from1 <= $to and $from1 >= $from - $rl1 ) {
-				add_pileup ( $from1 , lc $r->[0]->[8] , $rl1 , $r_bands , $r_btype , $mode , $dist , 1 ) ;
-			}
-			if ( defined $from2 and $from2 <= $to and $from2 >= $from - $rl2 ) {
-				add_pileup ( $from2 , lc $r->[1]->[8] , $rl2 , $r_bands , $r_btype , $mode , $dist , 1 ) ;
-			}
-		}
+
+# The returned position is relative to $from, starting from 0.
+# Only the part of the sequence visible in the current window is returned.
+#
+sub trim_sam_reads
+{
+    my ($seq,$cigar,$mode,$start) = @_;
+
+    my $seq_len = length($seq);
+    my $ref_len = $to - $from + 1;
+
+    # If not visible, return immediately
+    if ( $start > $to ) { return ($to-$from+1,'',''); }
+    if ( $start + $seq_len <= $from ) { return (0,'',''); }
+
+    my ($out_offset,$out_seq,$out_btype);
+
+    my $ninserts = 0;
+    my $ndels = 0;
+    my $iseq  = 0;
+    while ($cigar)
+    {
+        if ( !($cigar=~/^(\d+)(\D)/) ) { last }
+
+        my $count = $1;
+        my $type  = $2;
+        $cigar    = $';
+
+        if ( $type eq 'M' )
+        {
+            my $iref = $start + $iseq - $ninserts + $ndels - $from;
+            for (my $i=0; $i<$count; $i++)
+            {
+                if ( $iref >= $ref_len ) { last; }
+
+                my $snp = substr($seq,$iseq,1);
+                my $ref = substr($refseq,$iref,1);
+                
+                if ( $snp eq $ref )
+                {
+                    $out_seq   .= lc($snp);
+                    $out_btype .= chr($mode + 65);
+                }
+                else
+                {
+                    $out_seq   .= uc($snp);
+                    $out_btype .= chr($mode + 65);
+                }
+
+                $iref++;
+                $iseq++;
+            }
+            if ( $iref> $ref_len ) { last; }
+        }
+        elsif ( $type eq 'D' )
+        {
+            $out_seq   .= '*' x $count;
+            $out_btype .= chr($MODE_DELETION + 65) x $count;
+            $ndels += $count;
+        }
+        elsif ( $type eq 'I' )
+        {
+            $out_seq   .= uc substr($seq,$iseq,$count);
+            $out_btype .= chr($MODE_INSERTION + 65) x $count;
+            $iseq += $count;
+            $ninserts += $count;
+        }
+        else { die "Could not parse the cigar $seq .. $cigar.\n" }
+    }
+
+    if ( $start < $from )
+    {
+        substr($out_seq, 0, $from-$start,'');
+        substr($out_btype, 0, $from-$start,'');
+        $start = $from;
+    }
+    if ( $start + length($out_seq) - 1 > $to ) 
+    {
+        $out_seq = substr($out_seq,0,$to-$start+1);
+    }
+    return ($start-$from,$out_seq,$out_btype);
+}
+
+
+sub pile2bands_sam 
+{
+	my ( $r_bands , $r_btype , $mode , $paired_pileup , $data ) = @_ ;
+
+	foreach ( @{$data} ) 
+    {
+		my $r = $sam_reads{$_};
+        
+        my ($start,$seq,$btype) = trim_sam_reads($r->[0]->[8],$r->[0]->[4],$mode,$r->[0]->[2]);
+		my $seq_len = length $seq;
+
+        if ( scalar @$r == 1 )
+        {
+            sam_add_pileup($start, $seq, $seq_len, $r_bands, $r_btype, $btype);
+            next;
+        }
+
+        my ($start2,$seq2,$btype2) = trim_sam_reads($r->[1]->[8],$r->[1]->[4],$mode,$r->[1]->[2]);
+		my $seq_len2 = length $seq2;
+
+        if ( !$seq_len && !$seq_len2 ) { next; }
+
+        my $between = $start2 - $start - $seq_len;
+
+        if ( $between<0 )
+        {
+            # The sequences overlap - the overlapping positions will be overwritten
+            #   by $seq2
+            substr($seq,$between,-$between) = substr($seq2,0,-$between);
+            substr($seq2,0,-$between,'');
+
+            substr($btype,$between,-$between) = substr($btype2,0,-$between);
+            substr($btype2,0,-$between,'');
+            $between = 0;
+        }
+
+        $seq .= '_' x $between ;
+        $seq .= $seq2;
+
+        $btype .= chr ($mode + 65) x $between ;
+        $btype .= $btype2;
+
+        sam_add_pileup ($start, $seq , length $seq, $r_bands , $r_btype , $btype);
 	}
+}
+
+
+sub sam_add_pileup 
+{
+	my ($seq_start, $seq, $seq_len, $rbands, $rbtype, $btype) = @_ ;
+
+    my $ref_len = $to - $from + 1;
+
+	my $use_band ;
+	my $limit = scalar ( @{$rbands} ) - 1 ;
+
+    if ( $limit>$max_pileup_rows ) { return; }
+
+	foreach my $band ( 0 .. $limit ) 
+    {
+        my $str;
+        if ( $seq_start>0 ) 
+        { 
+            $str = substr($rbands->[$band], $seq_start-1, $seq_len+2); 
+        }
+        else
+        {
+            $str = substr($rbands->[$band], $seq_start, $seq_len+1); 
+        }
+
+        if ( $str=~/^ +$/ ) 
+        { 
+		    $use_band = $band;
+		    last;
+        }
+	}
+	
+	unless ( defined $use_band ) {
+		$use_band = scalar ( @{$rbands} ) ;
+		push @{$rbands} , ( ' ' x $ref_len ) ;
+		push @{$rbtype} , ( ' ' x $ref_len ) ;
+	}
+	
+	substr ( $rbands->[$use_band] , $seq_start, $seq_len ) = $seq ;
+	substr ( $rbtype->[$use_band] , $seq_start, $seq_len ) = $btype;
 }
 
 
@@ -784,6 +1051,7 @@ sub pileup_my_refseq_part {
 	$seq .= substr lc $refseq , $start , $rl ;
 	return $seq ;
 }
+
 
 sub add_pileup {
 	my ( $start , $read_sequence , $rl , $rbands , $rbtype , $mode , $dist , $sam ) = @_ ;
@@ -866,34 +1134,77 @@ sub add_coverage {
 	}
 }
 
-sub add_coverage_sam_single {
-	my ( $from, $to, $r ) = @_ ;
+sub add_coverage_sam_single 
+{
+	my ($coverage, $from, $to, $r) = @_ ;
 
 	my $start = $r->[2];
 	my $end   = $start + length $r->[8];
 	if ( $end > $to ) { $end = $to; }
 
 	my $ifrom = $start - $from;
-	if ( $ifrom < 0 ) { $ifrom = 1; }   # not sure why the indexing was from 1 and not from 0?
+	if ( $ifrom < 0 ) { $ifrom = 0; }
 
 	my $ito = $end - $from;
-	if ( $ito > $to-$from+1 ) { $ito=$to-$from+1; }
+	if ( $ito > $to-$from ) { $ito=$to-$from; }
 
-	for (my $i=$ifrom; $i<=$ito; $i++) {
-		$coverage[$i]++;
+	for (my $i=$ifrom; $i<=$ito; $i++) 
+    {
+		$$coverage[$i]++;
 	}
 }
 
-sub add_coverage_sam {
-	my ( $from, $to, $data , $single ) = ( @_ , 0 ) ;
-	foreach ( @{$data} ) {
-		my $d = $sam_reads{$_} ;
-		add_coverage_sam_single ($from, $to, $d->[0] ) ;
-		add_coverage_sam_single ($from, $to, $d->[1] ) unless $single ;
+sub add_coverage_sam 
+{
+	my ($coverage, $from, $to, $data) = @_;
+	foreach ( @{$data} ) 
+    {
+		my $d = $sam_reads{$_};
+		add_coverage_sam_single($coverage, $from, $to, $d->[0]);
+		add_coverage_sam_single($coverage, $from, $to, $d->[1]) unless !$d->[1];
 	}
 }
 
-sub dump_image_coverageview {
+
+sub dump_image_coverageview 
+{
+	if ( !$using_bam ) 
+    {
+        die "FIXME: the old code not included\n";
+    }
+
+    my (@coverage,@coverage_tot);
+    for my $i (0 .. ($to-$from))
+    {
+        $coverage[$i] = 0;
+    }
+	
+    add_coverage_sam(\@coverage, $from, $to, \@sam_perfect);
+    add_coverage_sam(\@coverage, $from, $to, \@sam_perfect_singles);
+    add_coverage_sam(\@coverage, $from, $to, \@sam_snps);
+    add_coverage_sam(\@coverage, $from, $to, \@sam_inversions);
+    add_coverage_sam(\@coverage, $from, $to, \@sam_single);
+
+    for my $i (0 .. ($to-$from))
+    {
+        $coverage_tot[$i] = $coverage[$i];
+    }
+    add_coverage_sam(\@coverage_tot, $from, $to, \@sam_mapqual_zero);
+    add_coverage_sam(\@coverage_tot, $from, $to, \@sam_mapqual_zero_pair);
+
+    my $plot  = Plot->new({width=>$width,height=>80,fgcolor=>$lscolor{'mapqual_zero'},bgcolor=>$lscolor{'white'}});
+    $plot->scaled_polygon(\@coverage_tot);
+    $plot->set({fgcolor=>$lscolor{'blue'}});
+    $plot->scaled_polygon(\@coverage);
+    $plot->set({fgcolor=>$lscolor{'black'}});
+    $plot->draw_yscalebar(\@coverage);
+    write_png($$plot{image});
+
+    return;
+}
+
+
+sub dump_image_coverageview_ori {
 	my $ft = $to - $from + 1 ;
 	$coverage[$_] = 0 foreach ( 0 .. $ft+1000 ) ;
 
@@ -1069,6 +1380,19 @@ sub dump_image_coverageview {
 #________________________________________________________________________________________________________________________________________________
 
 
+# The paired_reads display splits the screen into two parts, where one positions
+#   the reads vertically according to their insert size, while in the other are
+#   the reads positiioned randomly.
+sub sam_n_zero_isize
+{
+    return scalar @sam_single + scalar @sam_mapqual_zero;
+}
+sub sam_n_nonzero_isize
+{
+    return scalar @sam_perfect + scalar @sam_inversions + scalar @sam_mapqual_zero_pair + scalar @sam_perfect_singles;
+}
+
+
 sub dump_image_indelview {
 	$ft = $to - $from + 1 ;
 	my $text_mode = $width / $ft > 5 ;
@@ -1088,7 +1412,7 @@ sub dump_image_indelview {
 	my $inversion_middle_color = $im->colorAllocate ( 0x99 , 0xD2 , 0x58 ) ; # 99D258
 	my $orange = $im->colorAllocate ( 0xFF , 0xAA , 0x00 ) ;
 	my $grey = $im->colorAllocate ( @{$lscolor{'grey'}} ) ;
-
+    my $col_mapqual_zero = $im->colorAllocate( @{$lscolor{'mapqual_zero'}} );
 
 	
 	my @ann_color = ( $black , $blue , $red , $single_color , $orange , $inversion_right_color, $inversion_middle_color , $variance_color  , $inversion_left_color , $inversion_color ) ;
@@ -1119,12 +1443,24 @@ sub dump_image_indelview {
 		$sam_col_read_pair_connection = $grey ;
 		$sam_col_read_pair_quality = $orange ;
 		$sam_col_single_read_quality = $orange ;
-		if ( $max_dist <= 1 ) {
-			$max_dist = $sam_max_found_fragment ;
-			$max_dist = $height - $scale_height if $max_dist < $height - $scale_height ;
-			$max_dist = $height ; # AAARGH DUMMY FIXME !!!!!
-		}
-#		&sam_paint ;
+		$sam_col_mapqual_zero = $col_mapqual_zero;
+        # Uh, what is this?
+        #
+		#   if ( $max_dist <= 1 ) {
+		#   	$max_dist = $sam_max_found_fragment ;
+		#   	$max_dist = $height - $scale_height if $max_dist < $height - $scale_height ;
+		#   	$max_dist = $height ; # AAARGH DUMMY FIXME !!!!!
+		#   }
+        #&sam_paint ;
+        my $nnonzeros = sam_n_nonzero_isize();
+        my $nzeros    = sam_n_zero_isize();
+        my $margin    = gdSmallFont->height*2;
+        $height_nonzero_isize  = ($nnonzeros+$nzeros) ? int(($height-$margin)*$nnonzeros/($nnonzeros+$nzeros)) : 1;
+        if ( !$height_nonzero_isize ) { $height_nonzero_isize=1; }    # to prevent division by 0
+		$height_nonzero_isize = $height - 20 unless $display_single ;
+        $height_zero_isize = $height - $margin - $height_nonzero_isize;
+
+        $max_dist = $max_insert_size;
 	}
 
 	
@@ -1157,6 +1493,7 @@ sub dump_image_indelview {
 		}
 		if ($using_bam ) {
 			sam_paint_single_short_reads ( \@sam_single , $sam_col_single_read ) ;
+			sam_paint_single_short_reads ( \@sam_mapqual_zero, $sam_col_mapqual_zero ) ;
 			sam_paint_short_single_reads_quality ( \@sam_single , $sam_col_single_read_quality ) if $sam_show_read_quality ;
 		}
 	}
@@ -1176,6 +1513,7 @@ sub dump_image_indelview {
 			sam_paint_short_read_pair_connections ( \@sam_perfect , $sam_col_read_pair_connection ) ;
 			sam_paint_short_read_pair_connections ( \@sam_snps , $sam_col_read_pair_connection ) ;
 			sam_paint_short_read_pair_connections ( \@sam_inversions , $sam_col_read_pair_connection ) ;
+			sam_paint_short_read_pair_connections ( \@sam_mapqual_zero_pair, $sam_col_read_pair_connection ) ;
 		}
 	}
 
@@ -1184,6 +1522,7 @@ sub dump_image_indelview {
 		sam_paint_short_read_pairs_quality ( \@sam_perfect , $sam_col_read_pair_quality ) ;
 		sam_paint_short_read_pairs_quality ( \@sam_snps , $sam_col_read_pair_quality ) ;
 		sam_paint_short_read_pairs_quality ( \@sam_inversions , $sam_col_read_pair_quality ) ;
+		sam_paint_short_read_pairs_quality ( \@sam_mapqual_zero_pair, $sam_col_mapqual_zero ) ;
 	}
 
 	# Inversion boundaries
@@ -1231,6 +1570,8 @@ sub dump_image_indelview {
 		sam_paint_short_read_pairs ( \@sam_perfect , $sam_col_matching_read , 0 ) ;
 		sam_paint_short_read_pairs ( \@sam_snps , $sam_col_matching_read , 1 ) ;
 		sam_paint_short_read_pairs ( \@sam_inversions , $sam_col_inversion , 1 ) ;
+		sam_paint_short_read_pairs ( \@sam_mapqual_zero_pair, $sam_col_mapqual_zero, 0 ) ;
+        sam_paint_short_read_pairs ( \@sam_perfect_singles, $sam_col_matching_read, 0 ) ;
 	}
 
 	
@@ -1323,15 +1664,62 @@ sub dump_image_indelview {
 	draw_h_axis ( $im , $black ) ;
 	
 	# Vertical axis
-	my $diff = 100 ;
+	my $diff = 100;
 	$diff = 500 if $max_dist > 2500 ;
 	$diff = 2500 if $max_dist > 25000 ;
-	foreach ( 1 .. $max_dist ) {
-		next unless $_ % $diff == 0 ;
-		my $y = $height - $_ * $height / $max_dist ;
-		$im->line ( 0 , $y , 10 , $y , $black ) ;
-		$im->string ( gdSmallFont , 13 , $y > 5 ? $y - 6 : -3 , $_ , $black ) ;
-	}
+
+    my ($w,$h) = (gdSmallFont->width,gdSmallFont->height);
+    if ( $using_bam )
+    {
+        my $min_diff = $max_dist*$h/$height_nonzero_isize;
+        $diff = 1;
+        my $i=0;
+        while ( $diff < 2*$min_diff )
+        {
+            $diff *= $i%2 ? 2 : 5;
+            $i++;
+        }
+    }
+
+    # Why to make so many unnecessary iterations?
+    #
+	#   foreach ( 1 .. $max_dist ) {
+	#   	next unless $_ % $diff == 0 ;
+	#   	my $y = $height - $_ * $height / $max_dist ;
+    #       push @positions,$y;
+	#   	$im->line ( 0 , $y , 10 , $y , $black ) ;
+	#   	$im->string ( gdSmallFont , 13 , $y > 5 ? $y - 6 : -3 , $_ , $black ) ;
+	#   }
+    #
+    # .. do this instead:
+    #
+    # Area covered by the y-tick label
+    my @positions = (); # Remember the positions of ticks, so that we can draw the label
+    my $pos = 0;
+    while ( $pos<=$max_dist )
+    {
+        my $y = $using_bam ? sam_get_y($pos) : $height - $pos * $height / $max_dist;    
+        $im->line ( 0 , $y , 10 , $y , $black ) ;
+        $im->string ( gdSmallFont , 13 , $y > 5 ? $y - 6 : -3 , $pos , $black ) ;
+        push @positions,$y;
+        $pos += $diff;
+    }
+
+    # Too bad, there are no margins in the image for the axis labels - place the label
+    #   in the middle between two ticks, close to the half of the image.
+    #
+    my $label = 'Insert Size';
+    $w *= length $label;
+    my $label_y = $height*0.5;
+    if ( @positions ) 
+    {
+        my $i  = int((scalar @positions)*0.5);
+        my $i1 = $i+1;
+        if ( $i1 >= scalar @positions ) { $i1=$i; }
+        $label_y = ($positions[$i1] + $positions[$i] + $w)*0.5;
+    }
+    $im->filledRectangle(0,$label_y-$w-1,$h-2,$label_y-2, $white);
+    $im->stringUp(gdSmallFont, -2, $label_y, $label, $black);
 
 	show_debugging_output ( $im , $red ) ;
 
@@ -1851,7 +2239,57 @@ sub dump_image_deletions {
 	write_png ( $im ) ;
 }
 
-sub dump_image_gc {
+sub dump_image_gc
+{
+    my $win   = 5;
+    my $from2 = $from - $win;
+    my $to2   = $to   + $win;
+    if ( $from2 < 1 ) { $from2 = 1; }
+	my $refseq = get_chromosome_part($genome_file, $orig_chr, $from2, $to2);
+
+    my @gc_data = ();
+    my $len = length($refseq);
+    my $cnt = 0;
+    for (my $i=0; $i<2*$win; $i++) 
+    { 
+        my $base = substr($refseq,$i,1);
+        if ( $base eq 'C' or $base eq 'G' ) { $cnt++; }
+    }
+    for (my $i=$win; $i<$len-$win; $i++)
+    {
+        my $old = substr($refseq,$i-$win,1);
+        my $new = substr($refseq,$i+$win,1);
+        if ( $new eq 'C' or $new eq 'G' ) { $cnt++; }
+        $gc_data[$i-$win] = 100.*$cnt/(2.*$win+1);
+        if ( $old eq 'C' or $old eq 'G' ) { $cnt--; }
+
+        #printf STDERR $i-$win." .. %.1f .. ".substr($refseq,$i,1)."  [$old $new]\n",$gc_data[$i-$win];
+    }
+
+    my $plot  = Plot->new({width=>$width,height=>60,ymin=>0,ymax=>100,baseline=>50,fgcolor=>$lscolor{'green2'},bgcolor=>$lscolor{'white'},units=>'%'});
+    $plot->scaled_line(\@gc_data);
+    $plot->set({fgcolor=>$lscolor{'mapqual_zero'}});
+    $plot->baseline();
+    $plot->set({fgcolor=>$lscolor{'black'}});
+    $plot->draw_yscalebar(\@gc_data);
+    $plot->legend('[win '. ($win*2+1) . ']');
+    write_png($$plot{image});
+}
+
+
+sub error_exit
+{
+    my (@msg) = @_;
+    my $msg = join('',@msg);
+    my $plot = Plot->new({width=>$width,height=>60,fgcolor=>$lscolor{'black'},bgcolor=>$lscolor{'white'}});
+    my $img  = $$plot{image};
+    $img->string(gdLargeFont, 0, 0, $msg, $$plot{fgcolor});
+    write_png($$plot{image});
+    exit;
+}
+
+
+sub dump_image_gc_ori {
 	my $range = 1+11*2 ;
 	my $from2 = $from - $range ;
 	my $to2 = $to + $range ;
@@ -1933,12 +2371,18 @@ sub in_array {
 
 sub write_png {
 	my ( $im ) = @_ ;
-	print $cgi->header(-type=>'image/png',-expires=>'-1s');
+	print $cgi->header(-type=>'image/png',-expires=>'-1s') unless $DEBUG;
 	binmode STDOUT;
 	my $png = $im->png () ;
 	print $png ;
-	if ( $use_sanger_cache ) {
-		$sanger_cache_db->set ( $png , $sanger_cache_key , $sanger_cache_hours ) ;
+	if ( $use_sanger_cache ) 
+    {
+        if ( !$DEBUG && tv_interval($time0)>5 )
+        {
+            # Set the cache only if it took too long to create the image
+		    $sanger_cache_db->set ( $png , $sanger_cache_key , $sanger_cache_hours );
+            #print STDERR "get_data.pl: setting cache .. $sanger_cache_key\n";
+        }
 	}
 }
 
@@ -1970,6 +2414,7 @@ sub sam_paint {
 	sam_paint_short_read_pairs ( \@sam_snps , $sam_col_matching_read , 1 ) ;
 	sam_paint_short_read_pairs ( \@sam_inversions , $sam_col_inversion , 1 ) ;
 	sam_paint_single_short_reads ( \@sam_single , $sam_col_single_read ) if $display_single ;
+	sam_paint_single_short_reads ( \@sam_mapqual_zero, $sam_col_mapqual_zero ) if $display_single ;
 #	print "DONE!" ; exit ;
 }
 
@@ -1977,8 +2422,9 @@ sub sam_paint {
 sub sam_read_data {
 	my ( $file_bam ) = @_ ;
 	
-	my $from2 = $from - 1000 ;
-	my $to2 = $to + 1000 ;
+    my $delta = $max_insert_size ? $max_insert_size : 550;
+	my $from2 = $from - $delta;
+	my $to2   = $to   + $delta;
 	$from2 = 1 if $from2 < 1 ;
 	
 	$chromosome =~ /([a-zA-Z0-9_.]+)/ ;
@@ -1989,63 +2435,124 @@ sub sam_read_data {
 	$ENV{'PATH'} = $1;
 	
 #	print $cgi->header(-type=>'text/plain',-expires=>'-1s'); # For debugging output
+    my $max = 0;
+    my %isize_hist  = ();
 	my $nlines=0;
+    my $max_nlines = 500000;
 	open PIPE , "$cmd 2>&1 |" or die "$cmd |: $!";
-	while ( <PIPE> ) {
+	while ( <PIPE> ) 
+    {
 		$_ =~ /^(\S+)\s/ ;
 		my $id = $1;
 		my @a = split "\t" , $';
+        if ( 0x0004 & $a[0] ) { next; } # This read is unmapped
+        if ( $mapq_cutoff && $a[3]<$mapq_cutoff ) { next }   # This read has lower MAPQ
 		push @{$sam_reads{$id}} , \@a;
+
 		$nlines++;
-	}
+        if ( $nlines>$max_nlines ) 
+        { 
+            error_exit("Sorry, there are too many (>$max_nlines) reads in this region."); 
+        }
+
+        if ( $max_insert_size ) { next }
+        my $isize = abs($a[7]);
+        if ( !$isize ) { next; }
+
+        # To determine the maximum insert size, we must first know if the read 
+        #   will be actually visible in the window. 
+        #
+        my $pos_from = $a[2];
+        my $pos_to   = $pos_from+length($a[8])-1;
+        if ( $pos_from>$to ) { next }
+        if ( $pos_to<$from ) { next }
+
+        if ( $isize>$max ) { $max=$isize; }
+        $isize_hist{$isize}++;
+    }
 	close PIPE ;
 	if ( defined $ls_max_lines and $nlines > $ls_max_lines ) { $display_snps = 0; }
+
+    if ( !$max_insert_size ) { $max_insert_size= $max ? 1.1*$max : 500; }
+    if ( $nlines>10000 && $view eq 'paired_pileup' )
+    {
+        $view = 'indel';
+        #print STDERR "get_data.pl: too many lines, switching to indelview ..\n";
+    }
+    #print STDERR "get_data.pl: nlines=$nlines\n";
 }
 
 
 # Separate into bins
-sub sam_bin {
-	foreach my $read ( keys %sam_reads ) {
-		my $r = $sam_reads{$read} ;
-		my $single = ( 2 == scalar ( @{$r} ) and $r->[0]->[2] == $r->[1]->[2] and $r->[0]->[1] == $r->[1]->[1] ) ;
-		
-		if ( 2 != scalar @{$r} or $single ) {
-			if ( 1 == scalar @{$r} or $single ) { # Single read
-				next if ( $r->[0]->[0] & 0x0002 ) > 0 ;
-				next unless $display_single ;
-				
-				$r->[0] = $r->[1] if 2 == scalar ( @{$r} ) and 0 == ( $r->[0]->[0] & 0x0008 ) ;
-				
-				sam_check4snps ( $r->[0] ) ;
-				push @sam_single , $read ; # FIXME detect capillary
-			} elsif ( 2 < scalar @{$r} ) {
-				# Multiple alignment, don't display!!!!
-			}
-		} elsif ( $r->[0]->[1] ne $r->[1]->[1] ) { # Two read "halfs", but on different chromosomes
-			print STDERR "Not the same chromosome : $read\n" ;
-		} elsif ( ( $r->[0]->[0] & 0x0010 ) == ( $r->[1]->[0] & 0x0010 ) ) { # Two reads, inversion
-			sam_check4snps ( $r->[0] ) ;
-			sam_check4snps ( $r->[1] ) ;
-			push @sam_inversions , $read if $display_inversions ;
-		} else { # Just two reads
-			my $snps1 = sam_check4snps ( $r->[0] ) ;
-			my $snps2 = sam_check4snps ( $r->[1] ) ;
-			if ( $snps1 + $snps2 == 0 ) {
-				push @sam_perfect , $read if $display_perfect ;
-			} else {
-				push @sam_snps , $read if $display_snps ;
-			}
-			unless ( defined $max_dist ) {
-				my $dist = abs ( $r->[0]->[7] ) ;
-				$sam_max_found_fragment = $dist if $sam_max_found_fragment < $dist ;
-			}
-		}
-	}
+sub sam_bin 
+{
+    foreach my $read ( keys %sam_reads )
+    {
+        my $r = $sam_reads{$read};
+        my $nreads = scalar @$r;
+
+        if ( $nreads==2 and $r->[0]->[2] == $r->[1]->[2] and $r->[0]->[1] == $r->[1]->[1])
+        {
+            # There are two reads, but they are mapped to the same position.
+            # Can this happen with unmapped reads filtered out? Just delete
+            #   the redundant one.
+            delete($$r[1]);
+            $nreads = 1;
+        }
+
+        if ( $nreads==1 )
+        {
+            if ( $r->[0]->[0] & 0x0008 )
+            {
+                # The mate is unmapped
+                push @sam_single, $read;
+                next;
+            }
+
+            if ( !$r->[0]->[3] )
+            {
+                # The mapping quality is zero - marks non-unique mapping
+                if ( $r->[0]->[7] )
+                {
+                    # Although we do not have the mate, the read has a non-zero insert size.
+                    push @sam_mapqual_zero_pair, $read;
+                }
+                else
+                {
+                    push @sam_mapqual_zero, $read;
+                }
+                next;
+            }
+
+            # These don't need to be exactly "perfect". For example, zero-insert
+            #   size reads with mate mapped to a different chromosome fall in this
+            #   category as well.
+            push @sam_perfect_singles, $read;
+            next;
+        }
+
+        if ( ( $r->[0]->[0] & 0x0010 ) == ( $r->[1]->[0] & 0x0010 ) )
+        {
+            # Both reads are mapped to the same strand - inversion
+            push @sam_inversions, $read;
+            next;
+        }
+
+        if ( !$r->[0]->[3] )
+        {
+            # The mapping quality is zero - marks non-unique mapping
+            push @sam_mapqual_zero_pair, $read;
+            next;
+        }
+
+        push @sam_perfect, $read;
+    }
 }
 
 
 
 sub sam_check4snps {
+    return 0;   # this is treated properly in trim_sam_reads
 	if ( !$display_snps ) { return 0; }
 
 	my ($r) = @_;
@@ -2116,10 +2623,15 @@ sub sam_check4snps_old {
 
 sub sam_get_y {
 	my ( $r ) = @_ ;
-	my $y = abs ( $r->[7] ) ;#- length $r->[8] ;
-	$y = ( $height  ) * $y / $max_dist ;
-	$y = $height - $y ;#- $scale_height ;
-	return $y ;
+
+    my $y = !ref($r) ? $r : $$r[7];
+    return $height_nonzero_isize - $height_nonzero_isize * abs($y)/$max_insert_size;
+
+	#   my $y = abs ( $r->[7] ) ;#- length $r->[8] ;
+	#   $y = ( $height  ) * $y / $max_dist ;
+	#   #$y = $height - $y - $scale_height ;
+	#   $y = $height - $y ; #ori
+	#   return $y ;
 }
 
 sub sam_paint_short_read_pair_connections {
@@ -2143,11 +2655,13 @@ sub sam_paint_short_read_pair_connections {
 
 sub sam_get_single_read_height {
 	my ( $r ) = @_ ;
-	return abs ( ( $r->[2] - $from ) % 50 ) ;
-	my $y = hex ( substr md5_hex ( $r->[9] ) , 0 , 8 ) % ( $height - $scale_height ) ;
-#	my $y = $r->[2] % ( $height - $scale_height ) ;
-	$y = $height - $scale_height - $y ;
-	return $y ;
+    
+    return $height_nonzero_isize + abs($$r[2] - $from)%$height_zero_isize;
+
+	# return abs ( ( $r->[2] - $from ) % 50 ) ;
+	# my $y = hex ( substr md5_hex ( $r->[9] ) , 0 , 8 ) % ( $height - $scale_height ) ;
+	# $y = $height - $scale_height - $y ; ori
+	# return $y ;
 }
 
 
@@ -2229,25 +2743,42 @@ sub sam_paint_short_read_pair {
 	sam_paint_single_short_read ( $r->[1] , $col , $y , $draw_snps ) ;
 }
 
-sub sam_paint_single_short_read {
+sub sam_paint_single_short_read 
+{
 	my ( $r , $col , $y , $draw_snps ) = @_ ;
 	my $x1 = $r->[2] - $from ;
 	my $x2 = $x1 + length $r->[8] ;
-	return if $x1 < 0 and $x2 < 0 ;
 
-	$x1 = int ( $x1 * $width / $ft ) ;
-	$x2 = int ( $x2 * $width / $ft ) ;
-	
-	return if $x1 > $width and $x2 > $width ;
-	
+    if ( $y < 0 ) { return; }
+    if ( $y > $height ) { return; }
+
+    if ( $x2 < 0 ) { return; }
+    if ( $x1 > $to-$from ) { return; }
+
+    $x1 = int( $x1*$width/$ft);
+    $x2 = int( $x2*$width/$ft);
+
+    if ( $x1<0 ) { $x1 = 0; }
+    if ( $x2>=$width ) { $x2 = $width-1; }
+    if ( $x1 == $x2 ) { return; }
+
 	$im->line ( $x1 , $y , $x2 , $y , $col ) ;
-	if ( $sam_show_read_arrows ) {
-		if ( $r->[0] & 0x0010 ) { # reverse
-			my $xn = int ( $x1 + ( $x2 - $x1 ) / 5 ) ;
-			$im->line ( $x1 , $y , $xn , $y+2 , $col ) if $xn != $x1 ;
-		} else {
-			my $xn = int ( $x2 - ( $x2 - $x1 ) / 5 ) ;
-			$im->line ( $xn , $y-2 , $x2 , $y , $col ) if $xn != $x2 ;
+	if ( $sam_show_read_arrows ) 
+    {
+		if ( $r->[0] & 0x0010 ) 
+        { 
+            # reverse
+            #
+            # Make the arrows little smaller and do not scale with size
+			#   my $xn = int ( $x1 + ( $x2 - $x1 ) / 5 ) ;
+			#   $im->line ( $x1 , $y , $xn , $y+2 , $col ) if $xn != $x1 ;
+			$im->line($x1 , $y , $x1+2 , $y+2, $col );
+		} 
+        else 
+        {
+			#my $xn = int ( $x2 - ( $x2 - $x1 ) / 5 ) ;
+			#$im->line ( $xn , $y-2 , $x2 , $y , $col ) if $xn != $x2 ;
+			$im->line($x2 , $y , $x2-2 , $y-2, $col );
 		}
 	}
 	
@@ -2314,3 +2845,207 @@ if ( $output eq 'image' ) {
 		&dump_text ;
 	}
 }
+
+
+
+
+
+exit;
+
+
+#----------- Plot ----------------------
+
+package Plot;
+
+use GD;
+
+sub Plot::new
+{
+    my ($class,$args) = @_;
+
+    my $self = $args ? $args : {};
+    
+    if ( !$$self{width} ) { die "Expected width parameter.\n"; }
+    if ( !$$self{height} ) { die "Expected height parameter.\n"; }
+    if ( !$$self{bgcolor} ) { die "Expected bgcolor parameter\n"; }
+    if ( !$$self{fgcolor} ) { die "Expected fgcolor parameter\n"; }
+
+    if ( !exists($$self{margin_left}) ) { $$self{margin_left}=0; }
+    if ( !exists($$self{margin_right}) ) { $$self{margin_right}=0; }
+    if ( !exists($$self{margin_top}) ) { $$self{margin_top}=10; }
+    if ( !exists($$self{margin_bottom}) ) { $$self{margin_bottom}=10; }
+
+    $$self{image} = new GD::Image ($$self{width}, $$self{height});
+
+    $$self{fgcolor} = $$self{image}->colorAllocate(@{$$self{fgcolor}});
+    $$self{bgcolor} = $$self{image}->colorAllocate(@{$$self{bgcolor}});
+
+    $$self{image}->filledRectangle(0,0,$width,$height,$$self{bgcolor});
+
+    # Image dimensions without the margins
+    $$self{area_width}  = $$self{width} - $$self{margin_left} - $$self{margin_right};
+    $$self{area_height} = $$self{height} - $$self{margin_top} - $$self{margin_bottom};
+    $$self{baseline} = exists($$self{baseline}) ? $$self{baseline} : 0;
+
+    bless $self, ref($class) || $class;
+    return $self;
+}
+
+sub Plot::set
+{
+    my ($self,$args) = @_;
+    while (my ($key,$value)=each %$args)
+    {
+        if ( $key eq 'fgcolor' ) { $$self{fgcolor}=$$self{image}->colorAllocate(@$value); }
+        if ( $key eq 'bgcolor' ) { $$self{bgcolor}=$$self{image}->colorAllocate(@$value); }
+    }
+}
+
+sub Plot::set_scale_factor
+{
+    my ($self,$data) = @_;
+
+    my ($ymax,$ymin);
+
+    if ( !exists($$self{ymin}) || !exists($$self{ymax}) )
+    {
+        $ymax = $$data[0];
+        $ymin = $$data[0];
+        for my $value (@$data)
+        {
+            if ( $value>$ymax ) { $ymax=$value; }
+            if ( $value<$ymax ) { $ymin=$value; }
+        }
+    }
+    $ymin = exists($$self{ymin}) ? $$self{ymin} : $ymin;
+    $ymax = exists($$self{ymax}) ? $$self{ymax} : $ymax;
+
+    $$self{xscale} = $$self{area_width}/(scalar @$data-1);
+    $$self{yscale} = $ymax ? $$self{area_height}/$ymax : 1;
+}
+
+sub Plot::polygon
+{
+    my ($self,$data,$poly) = @_;
+
+    if ( !$$self{xscale} ) { $self->set_scale_factor($data); }
+
+    my $xscale = $$self{xscale};
+    my $yscale = $$self{yscale};
+
+    my $ndata  = scalar @$data;
+    my $prev_x = -1;
+    my $prev_y = 0;
+
+    if ( !$poly ) { $poly = new GD::Polygon; }
+    for (my $i=0; $i<$ndata; $i++)
+    {
+        my $x = int($i*$xscale) + $$self{margin_left};
+        my $y = $$self{area_height} - int($$data[$i]*$yscale) + $$self{margin_top};
+
+        if ( $prev_x!=-1 && $prev_x==$x && $prev_y<$y ) { next; }
+        $poly->addPt($x,$y);
+
+        $prev_x = $x;
+        $prev_y = $y;
+    }
+    return $poly;
+}
+
+sub Plot::scaled_polygon
+{
+    my ($self,$data) = @_;
+
+    if ( !$$self{xscale} ) { $self->set_scale_factor($data); }
+
+    my $poly = new GD::Polygon;
+    $poly->addPt($$self{margin_left} + 0,$$self{margin_top} + $$self{area_height} - int($$self{baseline}*$$self{yscale}));
+    $self->polygon($data,$poly);
+    $poly->addPt($$self{width} - $$self{margin_right}-1,$$self{margin_top} + $$self{area_height} - int($$self{baseline}*$$self{yscale}));
+    $$self{image}->setAntiAliased($$self{fgcolor});
+    $$self{image}->filledPolygon($poly,$$self{fgcolor});
+}
+
+sub Plot::scaled_line
+{
+    my ($self,$data) = @_;
+    my $poly = $self->polygon($data);
+    $$self{image}->setAntiAliased($$self{fgcolor});
+    $$self{image}->unclosedPolygon($poly,$$self{fgcolor});
+}
+
+sub Plot::baseline
+{
+    my ($self) = @_;
+    my $y = $$self{margin_top} + $$self{area_height} - int($$self{baseline}*$$self{yscale});
+    $$self{image}->line($$self{margin_left},$y,$$self{width}-$$self{margin_right}-1,$y,$$self{fgcolor});
+}
+
+sub Plot::legend
+{
+    my ($self,$legend) = @_;
+
+    # How can one determine text dimensions of the rendered text in GD?
+    #   ImageMagick seems to be much better in this.
+    my $len = length $legend;
+
+    my $y = 0;
+    my $x = $$self{width} - $$self{margin_right} - gdSmallFont->width*$len;
+
+    $$self{image}->string(gdSmallFont,$x,$y,$legend, $$self{fgcolor});
+}
+
+sub Plot::draw_yscalebar
+{
+    my ($self,$data) = @_;
+
+    if ( !$$self{yscale} ) { $self->set_scale_factor($data); }
+
+    my $max_value = $$self{area_height} / $$self{yscale};
+    my $min_diff = 1.2 * gdSmallFont->height / $$self{yscale};
+    my $units = $$self{units} ? $$self{units} : '';
+
+    my $ticks_len = 10;
+    my $pos = 0;
+
+    my $i = 0;
+    my $diff = 1;
+    while ( $diff < $min_diff )
+    {
+        #print STDERR "diff=$diff\n";
+        $diff *= $i%2 ? 2 : 5;
+        $i++;
+    }
+    if ( $pos+$diff>$max_value )
+    {
+        # If we are here, there is only one tick at 0. Try to do multiples of 5 instead.
+        $i = 0;
+        $diff = 1;
+        while ( $diff < $min_diff )
+        {
+            #print STDERR "diff=$diff\n";
+            $diff *= 5;
+            $i++;
+        }
+    }
+    if ( $pos+$diff>$max_value && ($max_value-0)>$min_diff )
+    {
+        # Still no tick? If there should be only one tick (at 0), print at least the maximum.
+        $diff = $max_value;
+    }
+
+    #print STDERR "diff=$diff max_val=$max_value min_diff=$min_diff font_height=",gdSmallFont->height," yscale=$$self{yscale}\n";
+
+    while ( $pos<=$max_value )
+    {
+        my $y = $$self{area_height} - int($pos*$$self{yscale}) + $$self{margin_top};
+        #print STDERR "$pos $y\n";
+
+        $$self{image}->line($$self{margin_left}, $y, $$self{margin_left}+$ticks_len, $y, $$self{fgcolor});
+        $$self{image}->string(gdSmallFont, $$self{margin_left} + $ticks_len*1.5, $y - gdSmallFont->height*0.5, $pos.$units, $$self{fgcolor});
+        $pos += $diff;
+    }
+}
+
+1;
+

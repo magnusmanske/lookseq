@@ -17,6 +17,7 @@ our @EXPORT = qw(
 	$use_sanger_cache $use_sanger_layout
 	$use_mysql $mysql_server $mysql_port $mysql_user $mysql_password @mysql_dbs
 	%lscolor $ls_max_lines
+	$bam_ftp $reference_ftp
 );
 
 # Tool title
@@ -87,6 +88,12 @@ $lscolor{'ltgrey'} = [ 0xDC , 0xDC , 0xDC ] ;
 $lscolor{'grey'} = [ 0xC8 , 0xC8 , 0xC8 ] ;
 $lscolor{'brown'} = [ 0xD2 , 0x69 , 0x1E ] ; # Inversion
 $lscolor{'cyan'} = [ 0x44 , 0xB4 , 0xD5 ] ; # Cigar
+$lscolor{'mapqual_zero'} = [0xff, 0x72, 0x00] ;   # mapping quality zero
+
+# BAM FTP
+our $bam_ftp ;
+our $reference_ftp ;
+
 
 # Upper SNP display limit for SAM format; set for max number of lines, e.g. 50000
 our $ls_max_lines ;
