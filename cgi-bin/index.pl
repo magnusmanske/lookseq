@@ -217,6 +217,14 @@ sub main {
 	}
 	close HTML ;
 	
+	my $mapq_param = $cgi->param('mapq') || '' ;
+	my $mapq = '' ;
+	foreach ( 1 .. 50 ) {
+		my $checked = $mapq_param eq $_ ? ' selected' : '' ;
+		$mapq .= "<option value='$_'$checked>$_</option>\n" ;
+	}
+	$out =~ s/MAPQ_SELECT/$mapq/ ;
+	
 	foreach ( keys %i18n ) {
 		my $key = "%$_%" ;
 		my $value = $i18n{$_} ;

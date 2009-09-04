@@ -2,6 +2,8 @@
 LookSeq browser interface
 (c) 2008 by Magnus Manske (mm6@sanger.ac.uk)
 Released under GPL
+
+    Petr Danecek (pd3@sanger.ac.uk), Team 145
 */
 
 //_________________________________________________________________________________________________
@@ -13,6 +15,8 @@ var is_loading = 0 ;
 var chromosomes = new Array () ;
 var chromosome_length = new Array () ;
 var display_mode = 'indel' ;
+var max_window = 1000;  // The maximum window - modified in runtime, value depends on the value of zoom set
+var min_window = 100;   // Do not display less than this many bases - modified in runtime, value depends on image width which can be changed
 var last_main_image_url = '' ;
 var last_url_second = '' ;
 var lane_select = 'single' ;
@@ -345,8 +349,10 @@ function update_reflink ( lanes , display ) {
 	var reflink = cgi_path + '/index.pl?show=' ;
 	reflink += sel.options[sel.selectedIndex].value + ':' + cur_from + '-' + cur_to + ',' + display_mode ;
 	reflink += '&lane=' + lanes + '&width=' + img_width ;
+    reflink += '&win=' + max_window;
 	reflink += '&display=' + display ;
 	if ( indel_zoom != 'auto' ) reflink += '&maxdist=' + indel_zoom ;
+    if ( mapq_cutoff != 0 ) reflink += '&mapq=' + mapq_cutoff;
 	if ( document.getElementById('display_second_track').checked ) {
 		reflink += '&second_image=' + second_track_lanes ;
 		if ( document.getElementById('squeeze_tracks').checked )
@@ -355,12 +361,37 @@ function update_reflink ( lanes , display ) {
 	document.getElementById('reflink').href = reflink ;
 }
 
+function get_max_to(cur_from)
+{
+    var max_to = cur_from + max_window;
+    var chr = get_selected_chromosome();
+    if ( max_to > chromosome_length[chr] )  max_to = chromosome_length[chr];
+    return max_to;
+}
+
 // Updates main image and annotation/GC display, according to current settings. The heart of this script.
 function update_image () {
-	if ( is_loading > 0 ) {
-		setTimeout ( update_image , 100 ) ;
-		return ;
+
+	if ( is_loading > 0 ) 
+    {
+        // The user pressed the refresh button while 'Updating..' in progress. This usually
+        //  happens when get_data.pl or other script dies. In such a case, the script was dead
+        //  and the user was left with the only option: reload of the page. The new behaviour:
+        //  If the page is not responding 15 sec, the user can change the region.
+
+        var end_time = new Date().getTime();
+        if ( end_time-start_time<15*1000 )
+        {
+            setTimeout(update_image , 100);
+            return ;
+        }
+        loading(-is_loading);
 	}
+    start_time = new Date().getTime();
+
+    // This seems to be "nice" spacing of chars for the given image width.
+    document.getElementById("image_width").value = img_width;
+    min_window = Math.floor(100*(img_width/700.));
 
 	var maxw = chromosome_length[get_selected_chromosome()] ;
 	cur_from = Math.floor ( document.getElementById('chr_from').value ) ;
@@ -421,6 +452,8 @@ function update_image () {
 	display += document.getElementById('display_pair_links').checked ? 'pairlinks|' : '' ;
 	display += document.getElementById('display_known_snps').checked ? 'potsnps|' : '' ;
 	display += document.getElementById('display_uniqueness').checked ? 'uniqueness|' : '' ;
+	display += document.getElementById('show_quality').checked ? 'readqual|' : '' ;
+	display += document.getElementById('show_arrows').checked ? 'orientation|' : '' ;
 	
 	document.getElementById('annotation_image').style.display = show_annotation ? 'block' : 'none' ;
 	document.getElementById('gc_image').style.display = show_gc ? 'block' : 'none' ;
@@ -428,6 +461,8 @@ function update_image () {
 	document.getElementById('deletion_image').style.display = show_deletions ? 'block' : 'none' ;
 	
 	var sel = document.getElementById("chr_list");
+    indel_zoom = document.getElementById('indel_zoom').value ;
+    mapq_cutoff = document.getElementById('mapq') ? document.getElementById('mapq').value : 0;
 
 	var url = cgi_path + '/get_data.pl' ;
 	url += '?from=' + cur_from ;
@@ -446,6 +481,8 @@ function update_image () {
 
 	var url_part2 = '' ;
 	url_part2 += '&view=' + display_mode ;
+	if ( indel_zoom != 'auto' ) url_part2 += '&maxdist=' + indel_zoom ;
+    if ( mapq_cutoff != 0 ) url_part2 += '&mapq=' + mapq_cutoff;
 	url_part2 += '&display=' + display ;
 	url_part2 += '&debug=' ;
 	url_part2 += test ? '1' : '0' ;
@@ -657,6 +694,8 @@ function show_new_range ( new_middle , new_range ) {
 	var new_to = Math.floor ( new_from + new_range ) ;
 	if ( new_from < 1 ) new_from = 1 ;
 	if ( new_to < new_from + 100 ) new_to = new_from + 100 ;
+
+	max_window = new_to - new_from;
 	
 	zoom_image ( new_from , new_to ) ;
 	document.getElementById('chr_from').value = new_from ;
@@ -769,6 +808,11 @@ function initalize_chromosomes () {
 	for ( var i = 0 ; i < lines.length ; i++ ) {
 		var l = lines[i].split ( "\t" ) ;
 		if ( l[0] == '' ) break ;
+        if ( l[0] == 'max_window' ) 
+        {
+            max_window = Math.floor (l[1]);
+            continue;
+        }
 		chromosomes.push ( l[0] ) ;
 		chromosome_length[l[0]] = Math.floor ( l[1] ) ;
 		var o = document.createElement ( 'option' ) ;
@@ -845,6 +889,30 @@ function zoom_1500 () {
 	show_new_range ( new_middle , new_range ) ;
 }
 
+// Event handler : Handles orientation display changes.
+function show_arrows_changed () {
+    update_image();
+}
+
+// Event handler : Handles quality display changes.
+function show_quality_changed () {
+    update_image();
+}
+
+function zoom (num) {
+	var new_middle = Math.floor ( ( cur_from + cur_to ) / 2 ) ;
+	max_window = parseInt(num);
+    if ( max_window < min_window )
+        max_window = min_window;
+
+    if ( max_window == min_window )
+        set_mode_paired_pileup();
+    else
+        set_mode_indel();
+	show_new_range ( new_middle , max_window ) ;
+}
+
+
 // Event handler : Handles InDel view "depth" changes.
 function indel_zoom_changed () {
 	var new_indel_zoom = document.getElementById('indel_zoom').value ;
@@ -853,10 +921,19 @@ function indel_zoom_changed () {
 	update_image () ;
 }
 
+// Event handler : Mapq value has been changed.
+function mapq_cutoff_changed () {
+	var new_mapq_cutoff = document.getElementById('mapq').value ;
+	if ( mapq_cutoff == new_mapq_cutoff ) return ;
+	mapq_cutoff = new_mapq_cutoff;
+	update_image () ;
+}
+
 // Event handler : Image width has been changed.
 function image_width_changed () {
 	var old_img_width = img_width ;
 	img_width = document.getElementById('image_width').value ;
+    max_window = Math.floor(img_width*100./700);
 
 	var new_middle = Math.floor ( ( cur_from + cur_to ) / 2 ) ;
 	var new_range = Math.floor ( ( cur_to - cur_from ) * img_width / old_img_width ) ;
@@ -883,6 +960,8 @@ function initialize_display () {
 	document.getElementById('display_gc').checked			= b['gc'] ? true : false ;
 	document.getElementById('display_coverage').checked		= b['coverage'] ? true : false ;
 	document.getElementById('display_deletions').checked	= b['deletions'] ? true : false ;
+	document.getElementById('show_quality').checked			= b['readqual'] ? true : false ;
+	document.getElementById('show_arrows').checked			= b['orientation'] ? true : false ;
 	
 	if ( indel_zoom != 'auto' ) document.getElementById('indel_zoom').value = indel_zoom ;
 }
@@ -1102,6 +1181,9 @@ function init () {
 	}
 	
 	if ( use_init ) {
+        if ( init_max_window )
+            max_window = init_max_window;
+
 		document.getElementById('chr_from').value = init_from ;
 		document.getElementById('chr_to').value = init_to ;
 		
