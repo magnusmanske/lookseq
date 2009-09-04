@@ -18,6 +18,7 @@ our @EXPORT = qw(
 	$use_mysql $mysql_server $mysql_port $mysql_user $mysql_password @mysql_dbs
 	%lscolor $ls_max_lines
 	$bam_ftp $reference_ftp
+	$sanger_header $css_file
 );
 
 # Tool title
@@ -94,6 +95,9 @@ $lscolor{'mapqual_zero'} = [0xff, 0x72, 0x00] ;   # mapping quality zero
 our $bam_ftp ;
 our $reference_ftp ;
 
+# Stuff
+our $sanger_header ;
+our $css_file ;
 
 # Upper SNP display limit for SAM format; set for max number of lines, e.g. 50000
 our $ls_max_lines ;

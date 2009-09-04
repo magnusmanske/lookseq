@@ -1,6 +1,7 @@
 #!/usr/local/bin/perl -T
 #########
 # Author:     Magnus Manske (mm6@sanger.ac.uk)
+#             Petr Danecek (pd3@sanger.ac.uk), Team 145
 # Group:      Team 112
 #
 
@@ -67,8 +68,8 @@ sub prepare_myscript {
 #		print join "\n" , @dbs ;
 		
 		foreach ( sort @dbs ) {
-			next if $_ eq $annotation_file ;
-			next if $_ eq $snp_file ;
+			next if (defined $annotation_file && $_ eq $annotation_file);
+			next if (defined $snp_file && $_ eq $snp_file);
 			$lanes{$_} = "lanes.push ( \"$_\" ) ;\n" ;
 			#$myscript .= "lanes.push ( \"$_\" ) ;\n" ;
 		}
@@ -78,7 +79,13 @@ sub prepare_myscript {
 		$myscript .= $lanes{$_} ;
 	}
 
-#		exit ;
+    if ( -e "$datapath/data.info" )
+    {
+        open(my $fh,'<',"$datapath/data.info") or die "$datapath/data.info: $!"; 
+        my @lines = <$fh>;
+        close($fh);
+        $myscript .= join('',@lines);
+    }
 	
 	my $width = $cgi->param('width') || 1024 ;
 	$myscript .= "var img_width = $width ;\n" ;
@@ -98,8 +105,23 @@ sub prepare_myscript {
 
 	my $show = $cgi->param('show') || '' ;
 	my $lane = $cgi->param('lane') || '' ;
-	if ( $lane ne '' and $show =~ m/^([\w\d\._]+):(\d+)-(\d+),([a-z]+)$/ ) {
-		$myscript .= "var use_init = true ;\nvar init_chr = \"$1\" ;\nvar init_from = $2 ;\nvar init_to = $3 ;\nvar init_mode = \"$4\" ;\nvar init_lane = \"$lane\" ;\n" ;
+    my $win  = $cgi->param('win')  || '';
+	if ( $lane ne '' and $show =~ m/^([\w\d\._]+):(\d+)-(\d+),([a-z_]+)$/ ) 
+    {
+        my $chrom = $1;
+        my $from  = $2;
+        my $to    = $3;
+        my $mode  = $4;
+        if ( $win ) 
+        { 
+            $to = $from+$win;
+            $myscript .= "var init_max_window=$win;\n";
+        }
+        else 
+        { 
+            $myscript .= "var init_max_window=0;\n";
+        }
+		$myscript .= "var use_init = true ;\nvar init_chr = \"$chrom\" ;\nvar init_from = $from ;\nvar init_to = $to ;\nvar init_mode = \"$mode\" ;\nvar init_lane = \"$lane\" ;\n" ;
 	} else {
 		$myscript .= "var use_init = false ;\n" ;
 	}
@@ -110,15 +132,23 @@ sub load_i18n_data {
 	my $interface_file = "$htmlpath/$fn.$language" ;
 	$interface_file = "$htmlpath/$fn.en" unless -e $interface_file ; # Default to en
 	return unless -e $interface_file ; # Even that's not there!
-	open INTERFACE , $interface_file ;
+	open INTERFACE , $interface_file or die "$interface_file: $!";
 	while ( <INTERFACE> ) {
 		chomp ;
 		my ( $key , $value ) = split "\t" , $_ , 2 ;
-		next if $key eq '' ;
+		next if (!$key || $key eq '');
 		$key =~ tr/ /_/ ;
 		$i18n{$key} = $value ;
 	}
 	close INTERFACE ;
+}
+
+sub debug
+{
+    my (@msg) = @_;
+    my $msg = join('',@msg);
+    $msg =~ s{\n}{_}g;
+    print STDERR "index.pl: $msg\n";
 }
 
 sub main {
@@ -127,14 +157,17 @@ sub main {
 	if ( $use_sanger_layout ) {
 		my @js_files = ( "$webroot/lookseq.js" ) ;
 		unshift @js_files , "$webroot/custom.js" if -e "$htmlpath/custom.js" ;
-	    $sw  = SangerWeb->new({
+        my $opts = 
+        {
 		    'title'   => $tooltitle,
-		    'banner'  => $tooltitle,
+		    # 'banner'  => $tooltitle,
 		    'author'  => q(mm6),
-		    'inifile' => "$docroot/Info/header.ini",
 		    'jsfile' => \@js_files,
 		    'onload' => "init()",
-		});
+		};
+        $$opts{'inifile'}    = $sanger_header unless !$sanger_header;
+        $$opts{'stylesheet'} = $css_file unless !$css_file;
+	    $sw  = SangerWeb->new($opts);
 	    $cgi = $sw->cgi();
 	} else {
 		$cgi = new CGI ;
@@ -148,7 +181,6 @@ sub main {
 	load_i18n_data ( 'custom' ) ;
 
 	&prepare_myscript ;
-
 	
 	if ( $use_sanger_layout ) {
 		my $dummy = $sw->header( { 'script' => $myscript } );
@@ -160,19 +192,25 @@ sub main {
 						) ;
 		unshift @js_files , { -type => 'text/javascript', -src => "$webroot/custom.js" } if -e "$htmlpath/custom.js" ;
 
-		print $cgi->header ;
-		print $cgi->start_html ( -script => \@js_files,
+        print $cgi->header;
+		#print $cgi->start_html ( -script => \@js_files,
+		my $x = $cgi->start_html ( -script => \@js_files,
 								 -onLoad => "init()" ,
 								 -title => $tooltitle,
 								 -meta => {
 									'robots' => $robots_flag
 								 }
-								 ) ;
+								 );
+        # Make the same header as sanger for html validation
+        $x =~ s{<!DOCTYPE[^>]+>}{<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">};
+        $x =~ s{<html[^>]+>}{<html xmlns="http://www.w3.org/1999/xhtml">};
+        print $x;
 	}
 	
-
 	my $out = '' ;
-	open HTML , "$htmlpath/lookseq.html" ;
+    my $layout = $cgi->param('xxx') ? 'test.html' : 'lookseq.html';
+	#open HTML , "$htmlpath/lookseq.html" or die "$htmlpath/lookseq.html: $!";
+	open HTML , "$htmlpath/$layout" or die "$htmlpath/lookseq.html: $!";
 	while ( <HTML> ) {
 		$_ =~ s/__HTMLPATH__/$webroot/g ;
 		$out .= $_ ;
