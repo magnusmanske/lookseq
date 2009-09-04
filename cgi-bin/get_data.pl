@@ -49,7 +49,7 @@ my $width = $cgi->param('width') || 1024 ;
 my $height = $cgi->param('height') || 512 ;
 my $display = $cgi->param('display') || '|perfect|snps|inversions|' ;
 my $mapq_cutoff = $cgi->param('mapq') ? $cgi->param('mapq') : 0;
-my $sam_show_read_arrows = $cgi->param('arrows') ? 1 : 0;
+my $sam_show_read_arrows = $display =~ m/\|orientation\|/ ;
 if ( !($mapq_cutoff=~/^\d+$/) ) { $mapq_cutoff=0; }
 my $max_insert_size = $cgi->param('maxdist') ? $cgi->param('maxdist') : 'Auto';
 $max_insert_size =~ /(\d+)/; $max_insert_size=$1;
@@ -159,7 +159,7 @@ my $ft ;
 my $using_bam = 0 ;
 my $cmd_samtools = "$execpath/samtools" ;
 #$cmd_samtools = "/nfs/sf8/G1K/bin/samtools" unless !$DEBUG;
-my $sam_show_read_quality = 0 ;
+my $sam_show_read_quality = $display =~ m/\|readqual\|/ ;
 my %sam_reads ;
 my ( @sam_single , @sam_perfect , @sam_snps , @sam_inversions , @sam_capillary, @sam_mapqual_zero, @sam_mapqual_zero_pair, @sam_perfect_singles ) ;
 my $sam_max_found_fragment = 0 ;
@@ -2479,6 +2479,11 @@ sub sam_read_data {
         $view = 'indel';
         #print STDERR "get_data.pl: too many lines, switching to indelview ..\n";
     }
+	
+	if ( $nlines>2000 && $view eq 'indel' ) { # Do not show quality for too many reads
+		$sam_show_read_quality = 0 ;
+	}
+	
     #print STDERR "get_data.pl: nlines=$nlines\n";
 }
 
@@ -2709,16 +2714,30 @@ sub sam_paint_short_read_pair_quality {
 
 sub sam_paint_single_short_read_quality {
 	my ( $r , $y , $col ) = @_ ;
-	my $l = length ( $r->[9] ) - 1 ;
+	my $qs = $r->[9] ;
+	chomp $qs ;
+	my $l = length ( $qs ) - 1 ;
 	my ( $lastx , $lasty ) ;
+	
+	my $lq = 99999 ;
+	my ( $lqx , $lqy ) ;
+	
 	foreach ( 0 .. $l ) {
-		my $ch = substr $r->[9] , $_ , 1 ;
+		my $ch = substr $qs , $_ , 1 ;
 		my $x = int ( ( $r->[2] - $from + $_ ) * $width / $ft ) ;
-		my $qh = 30 - ( ord ( $ch ) - 33 ) ;
+		my $q = ord ( $ch ) - 33 ;
+		my $qh = 30 - $q ;
+		if ( $q < $lq ) {
+			$lq = $q ;
+			$lqx = $x ;
+			$lqy = $y + $qh ;
+		}
 		$im->line ( $lastx , $lasty , $x , $y+$qh , $col ) if defined $lastx ;
 		$lastx = $x ;
 		$lasty = $y + $qh ;
 	}
+	
+	$im->string(gdSmallFont,$lqx,$lqy,$lq, $col) ;
 }
 
 #______________________________________________________________________________________

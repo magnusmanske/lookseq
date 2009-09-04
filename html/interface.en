@@ -35,8 +35,12 @@ opt_inv_ext	(ext.)
 opt_lp	link pairs
 opt_ks	known SNPs
 opt_ann	annotation
+opt_arr	orientation
 opt_gc	%GC
 opt_un	non-uniqueness
+opt_qual	read&nbsp;quality
+mapq	Mapping quality
+mapq_all	all
 
 legend_title	Legend :
 leg_indel	Paired reads :

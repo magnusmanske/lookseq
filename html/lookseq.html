@@ -69,6 +69,8 @@ InDel size
 <span style='margin-right:3px'><input type='checkbox' id='display_pair_links' onclick="update_image()" checked="checked"/><label for="display_pair_links">%OPT_LP%</label></span>
 <span style='margin-right:3px'><input type='checkbox' id='display_known_snps' onclick="update_image()" checked="checked"/><label for="display_known_snps">%OPT_KS%</label></span>
 <span style='margin-right:3px'><input type='checkbox' id='display_uniqueness' onclick="update_image()" checked="checked"/><label for="display_uniqueness">%OPT_UN%</label></span>
+<span style='margin-right:3px'><input type="checkbox" name='show_arrows' id='show_arrows' onClick='show_arrows_changed()' /><label for="show_arrows">%OPT_ARR%</label></span>
+<span style='margin-right:3px'><input type="checkbox" name='show_quality' id='show_quality' onClick='show_quality_changed()' /><label for="show_quality">%OPT_QUAL%</label></span>
 </span>
 <br/>%HELPER_DISPLAYS%
 <span style='margin-right:3px'><input type='checkbox' id='display_annotation' onclick="update_image()" checked="checked"/><label for="display_annotation">%OPT_ANN%</label></span>
@@ -81,6 +83,13 @@ InDel size
 </span>
 <span style='margin-right:3px'><input type='checkbox' id='display_second_track' onclick="toggle_second_track()" /><label for="display_second_track">%CB_SECOND_TRACK%</label></span>
 <span><input type='checkbox' id='squeeze_tracks' onclick="toggle_squeeze_tracks()" disabled /><label for="squeeze_tracks">%CB_SQUEEZE_TRACKS%</label></span>
+<span style='margin-left:10px'>
+%MAPQ%
+<select name='mapq' id='mapq' onclick='mapq_cutoff_changed()'>
+<option value='0'>%MAPQ_ALL%</option>
+MAPQ_SELECT
+</select>
+</span>
 </div>
 <div id='img_container' style='border:2px solid gray;background:#CCCCCC;overflow:hidden'>
 <div id='vruler' style='border-right:1px dotted red;z-index:5;position:absolute'></div>
