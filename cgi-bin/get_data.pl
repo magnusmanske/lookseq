@@ -220,8 +220,8 @@ if ( $display_pot_snps and defined  $snp_file ) {
 }
 
 my @databases = split ( ',' , $database ) ;
+#print $cgi->header(-type=>'text/plain',-expires=>'-1s'); # For debugging output
 foreach ( @databases ) {
-
 	if ( $_ =~ /.bam$/ ) {
 		$_ =~ /([a-zA-Z0-9_\-\.]+)/ ;
         my $file = $1;
@@ -243,6 +243,7 @@ foreach ( @databases ) {
             $file = "$datapath/$file";
         }
         sam_read_data($file);
+
         if ( $bam_ftp )
         {
             chdir($cwd) or die "Could not chdir $cwd: $!";
@@ -397,6 +398,7 @@ foreach ( @databases ) {
 
 if ( $using_bam ) 
 {
+	$refseq = get_chromosome_part( $genome_file , $orig_chr , $from , $to );
 	&sam_bin ;
 }
 
@@ -1567,7 +1569,7 @@ sub dump_image_indelview {
 		draw_indel_matches ( $im , $all_inv[$current_db] , $inversion_color , $max_dist , $rl , $ft , $len , 0 , $meta{'dbversion'} > 2 ) if $display_inversions ;
 	}
 	if ( $using_bam ) {
-		sam_paint_short_read_pairs ( \@sam_perfect , $sam_col_matching_read , 0 ) ;
+		sam_paint_short_read_pairs ( \@sam_perfect , $sam_col_matching_read , 1 ) ;
 		sam_paint_short_read_pairs ( \@sam_snps , $sam_col_matching_read , 1 ) ;
 		sam_paint_short_read_pairs ( \@sam_inversions , $sam_col_inversion , 1 ) ;
 		sam_paint_short_read_pairs ( \@sam_mapqual_zero_pair, $sam_col_mapqual_zero, 0 ) ;
@@ -2428,7 +2430,7 @@ sub sam_read_data {
 	$from2 = 1 if $from2 < 1 ;
 	
 	$chromosome =~ /([a-zA-Z0-9_.]+)/ ;
-	my $cmd = "$cmd_samtools view $file_bam $1:$from2-$to2" ;
+	my $cmd = "cd $datapath ; $cmd_samtools view $file_bam $1:$from2-$to2" ;
 	
 	# De-tainting $ENV{'PATH'}
 	$ENV{'PATH'} =~ /(.*)/;
@@ -2438,10 +2440,11 @@ sub sam_read_data {
     my $max = 0;
     my %isize_hist  = ();
 	my $nlines=0;
-    my $max_nlines = 500000;
+    my $max_nlines = 5000000;
 	open PIPE , "$cmd 2>&1 |" or die "$cmd |: $!";
 	while ( <PIPE> ) 
     {
+		next if $_ =~ m/^\[/ ;
 		$_ =~ /^(\S+)\s/ ;
 		my $id = $1;
 		my @a = split "\t" , $';
@@ -2557,7 +2560,7 @@ sub sam_bin
 
 
 sub sam_check4snps {
-    return 0;   # this is treated properly in trim_sam_reads
+#    return 0;   # this is treated properly in trim_sam_reads
 	if ( !$display_snps ) { return 0; }
 
 	my ($r) = @_;
@@ -2575,8 +2578,11 @@ sub sam_check4snps {
 
 	my $iseq = $iseq_offset;
 	my $iref = $iref_offset;
+	
+#	print substr ( $refseq , $iref , $seq_len ) . "1\n" ;
+#	print substr ( $seq , $iseq , $seq_len ) . "2\n\n" ;
 
-	my $mismatches = 0;
+	my $mismatches = 0 ;
 	while ( $iseq<$seq_len && $iref<$ref_len ) {
 		my $ref = substr($refseq,$iref,1);
 		my $snp = substr($seq,$iseq,1);
@@ -2762,8 +2768,22 @@ sub sam_paint_short_read_pair {
 	sam_paint_single_short_read ( $r->[1] , $col , $y , $draw_snps ) ;
 }
 
-sub sam_paint_single_short_read 
-{
+sub sam_paint_single_short_read {
+	my ( $r , $col , $y , $draw_snps ) = @_ ;
+#	print $r->[4] . "\n" ;
+	if ( $r->[4] =~ m/^\d+M$/ ) {
+		sam_paint_single_short_read_allmatch ( @_ ) ;
+	} else {
+		sam_paint_single_short_read_cigar ( @_ ) ;
+	}
+}
+
+sub sam_paint_single_short_read_cigar {
+	# TODO
+}
+
+#my ($start,$seq,$btype) = trim_sam_reads($r->[0]->[8],$r->[0]->[4],$mode,$r->[0]->[2]);
+sub sam_paint_single_short_read_allmatch {
 	my ( $r , $col , $y , $draw_snps ) = @_ ;
 	my $x1 = $r->[2] - $from ;
 	my $x2 = $x1 + length $r->[8] ;
@@ -2802,11 +2822,22 @@ sub sam_paint_single_short_read
 	}
 	
 	return unless $draw_snps ;
-	
+	return if 0 == sam_check4snps ( $r ) ;
+
+=cut
+	my ($start,$seq,$btype) = trim_sam_reads($r->[8],$r->[4],0,$r->[2]);
+	while ( $seq =~ m/[a-z]/g ) {
+		$x1 = int ( ( $start - $from + pos ( $seq ) - 1  ) * $width / $ft ) ;
+		$im->line ( $x1 , $y-2 , $x1 , $y+2 , $sam_col_mismatch ) ;
+	}
+=cut
+
+#=cut
 	while ( $r->[8] =~ m/[a-z]/g ) {
 		$x1 = int ( ( $r->[2] - $from + pos ( $r->[8] ) - 1  ) * $width / $ft ) ;
 		$im->line ( $x1 , $y-2 , $x1 , $y+2 , $sam_col_mismatch ) ;
 	}
+#=cut
 }
 
 
