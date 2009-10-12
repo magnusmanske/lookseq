@@ -4,6 +4,7 @@ You can run LookSeq under the native Mac web server. XAMPP and the like might wo
 You will need to install some software, though. First, get the GD library from http://libgd.org
 Install that through the usual ./configure ; make ; sudo make install
 Then get the Perl GD module : sudo cpan install GD
+Then get the Perl GD::Image module : sudo cpan install GD::Image
 Then get the Perl SQLite module : sudo cpan install DBD::SQLite
 
 You might have to comment out some "use" statements for Sanger modules in LookSeq files; we are working on fixing that bug.

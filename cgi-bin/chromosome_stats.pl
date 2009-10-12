@@ -52,7 +52,7 @@ if ( $reference_fa ) { # Use SAMTOOLS .fa file
 	{
 		die "Unexpected format of $fai_file: $_\n" if $_ !~ /^(\S+)\s+(\d+)\s+/ ;
 		my ( $chrom , $length ) = ( $1 , $2 ) ;
-		next if $chrom !~ /^(?:\d+|x|y)$/i ;
+#		next if $chrom !~ /^(?:\d+|x|y|)$/i ;
 		$chromosomes{$chrom} = $length;
 	}
 	close FILE ;
