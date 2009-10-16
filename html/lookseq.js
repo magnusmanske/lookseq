@@ -692,15 +692,23 @@ function show_new_range ( new_middle , new_range ) {
 	
 	var new_from = Math.floor ( new_middle - new_range / 2 ) ;
 	var new_to = Math.floor ( new_from + new_range ) ;
+	
+	set_new_from_to ( new_from , new_to ) ;
+}
+
+function set_new_from_to ( new_from , new_to , noupdate ) {
 	if ( new_from < 1 ) new_from = 1 ;
 	if ( new_to < new_from + 100 ) new_to = new_from + 100 ;
 
-	max_window = new_to - new_from;
-	
-	zoom_image ( new_from , new_to ) ;
+	if ( init_max_window == 0 ) max_window = new_to - new_from;
+	else if ( new_to - new_from + 1 > init_max_window ) {
+		new_to = new_from + init_max_window ;
+	}
+
+	if ( null == noupdate ) zoom_image ( new_from , new_to ) ;
 	document.getElementById('chr_from').value = new_from ;
 	document.getElementById('chr_to').value = new_to ;
-	update_image () ;
+	if ( null == noupdate ) update_image () ;
 }
 
 // Event handler : Button to zoom out was clicked.
@@ -714,10 +722,7 @@ function zoom_out () {
 		new_to++ ;
 	}
 	
-	zoom_image ( new_from , new_to ) ;
-	document.getElementById('chr_from').value = new_from ;
-	document.getElementById('chr_to').value = new_to ;
-	update_image () ;
+	set_new_from_to ( new_from , new_to ) ;
 }
 
 // Stretches/comresses the image prior to loading the new view. For effect only...
@@ -754,10 +759,7 @@ function zoom_in () {
 		new_to++ ;
 	}
 	
-	zoom_image ( new_from , new_to ) ;
-	document.getElementById('chr_from').value = new_from ;
-	document.getElementById('chr_to').value = new_to ;
-	update_image () ;
+	set_new_from_to ( new_from , new_to ) ;
 }
 
 // Event handler : Mouse is moving over main image. display vertical marker bar if appropriate.
@@ -836,7 +838,8 @@ function full_chromosome_rezise () {
 
 // Event handler : Chanages the chromosome, full display.
 function chromosome_changed () {
-	full_chromosome_rezise () ;
+	set_new_from_to ( 1 , chromosome_length[get_selected_chromosome()] , 1 ) ;
+//	full_chromosome_rezise () ;
 	update_image () ;
 }
 
@@ -964,16 +967,6 @@ function initialize_display () {
 	document.getElementById('show_arrows').checked			= b['orientation'] ? true : false ;
 	
 	if ( indel_zoom != 'auto' ) document.getElementById('indel_zoom').value = indel_zoom ;
-}
-
-// Sanger-specific function - not used, ignore
-function toggle_sanger_stuff () {
-	var new_state = document.getElementById('collapseHEAD').style.display == '' ? 'none' : '' ;
-	document.getElementById('collapseHEAD').style.display = new_state ;
-	document.getElementById('nav_bar').style.display = new_state ;
-	document.getElementById('navblock').style.display = new_state ;
-	toggle();
-	document.getElementById('button_sanger_bars').value = new_state == '' ? "Hide Sanger bars" : "Show Sanger bars" ;
 }
 
 // Updates the bar that shows the position of the current region within the chromosome.
@@ -1172,7 +1165,6 @@ function init () {
 	initialize_display () ;
 	show_lanes () ;
 	
-	document.getElementById('span_sanger_bars').style.display = sanger_layout ? 'inline' : 'none' ;
 	document.getElementById('img_container').style.width = img_width + 'px' ;
 
 	var sel = document.getElementById("image_width");
@@ -1181,8 +1173,9 @@ function init () {
 	}
 	
 	if ( use_init ) {
-        if ( init_max_window )
+        if ( init_max_window > 0 ) {
             max_window = init_max_window;
+		}
 
 		document.getElementById('chr_from').value = init_from ;
 		document.getElementById('chr_to').value = init_to ;
@@ -1236,7 +1229,8 @@ function init () {
 		return ;
 	}
 	
-	full_chromosome_rezise () ;
+//	full_chromosome_rezise () ;
+	set_new_from_to ( 1 , chromosome_length[get_selected_chromosome()] , 1 ) ;
 }
 
 // Event handler : Double-click on feature in annotation.

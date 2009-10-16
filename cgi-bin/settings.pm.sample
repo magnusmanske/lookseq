@@ -14,11 +14,10 @@ our @ISA = qw(Exporter);
 our @EXPORT = qw( 
 	$execpath $datapath $genome_file $webroot $docroot $htmlpath $tooltitle $reference_fa
 	$cgi_path $annotation_file $snp_file $robots_flag $use_db_index_cutoff $uniqueness_file 
-	$use_sanger_cache $use_sanger_layout
 	$use_mysql $mysql_server $mysql_port $mysql_user $mysql_password @mysql_dbs
 	%lscolor $ls_max_lines
 	$bam_ftp $reference_ftp
-	$sanger_header $css_file
+	$css_file
 );
 
 # Tool title
@@ -70,10 +69,6 @@ our $robots_flag = 'index, follow' ;
 # Don't use index for database query if region is larger than this
 $use_db_index_cutoff = 20000 ;
 
-# Sanger-specific flags; don't change unless you know what you're doing
-our $use_sanger_layout = 0 ;
-our $use_sanger_cache = 0 ;
-
 # Colors
 our %lscolor ;
 $lscolor{'black'} = [ 0x00 , 0x00 , 0x00 ] ;
@@ -96,7 +91,6 @@ our $bam_ftp ;
 our $reference_ftp ;
 
 # Stuff
-our $sanger_header ;
 our $css_file ;
 
 # Upper SNP display limit for SAM format; set for max number of lines, e.g. 50000

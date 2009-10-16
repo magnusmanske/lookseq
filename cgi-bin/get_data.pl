@@ -57,37 +57,6 @@ $max_insert_size =~ /(\d+)/; $max_insert_size=$1;
 $from =~ /(\d+)/ ; $from = $1 ;
 $to =~ /(\d+)/ ; $to = $1 ;
 
-# Sanger cache - others, ignore
-my ( $sanger_web , $sanger_cache_db , $sanger_cache_hours , $sanger_cache_key ) ;
-if ( $use_sanger_cache && !$DEBUG ) 
-{ 
-	use SangerPaths qw(core);
-	use SangerWeb;
-	$sanger_web = SangerWeb->new();
-	$sanger_cache_db = $sanger_web->dbstore();
-	$sanger_cache_hours = 1;
-    # The key is too long in this form and the sanger cache truncates it. In result,
-    # no caching is done.
-	#   $sanger_cache_key = "LookSeq/" . CGI::url(-query=>1) ;
-    $sanger_cache_key = $use_sanger_cache 
-        . join('-',$view,$database,$from,$to,$chromosome,$width,$height,$max_insert_size)
-        . md5(CGI::url(-query=>1)); 
-
-	my $data = $sanger_cache_db->get ( $sanger_cache_key ) ;
-	
-	if ( 0 < length $data && !$cgi->param('clean') ) {
-        $sanger_cache_db->refresh($sanger_cache_key, $sanger_cache_hours);
-        #print STDERR "get_data.pl: getting from cache .. $sanger_cache_key\n";
-		if ( $output eq 'text' ) {
-			print $sanger_web->cgi()->header(-type=>'text/plain',-expires=>'-1s');
-		} else {
-			print $sanger_web->cgi()->header(-type=>'image/png',-expires=>'-1s');
-			binmode STDOUT;
-		}
-		print $data ;
-		exit ;
-	}
-}
 
 my $display_perfect = $display =~ m/\|perfect\|/ ;
 my $display_snps = $display =~ m/\|snps\|/ ;
@@ -2377,15 +2346,6 @@ sub write_png {
 	binmode STDOUT;
 	my $png = $im->png () ;
 	print $png ;
-	if ( $use_sanger_cache ) 
-    {
-        if ( !$DEBUG && tv_interval($time0)>5 )
-        {
-            # Set the cache only if it took too long to create the image
-		    $sanger_cache_db->set ( $png , $sanger_cache_key , $sanger_cache_hours );
-            #print STDERR "get_data.pl: setting cache .. $sanger_cache_key\n";
-        }
-	}
 }
 
 
