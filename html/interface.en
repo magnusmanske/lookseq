@@ -1,7 +1,6 @@
 button_show_in_plasmodb	View reference genome
 
 update_image_button	Update image
-hide_sanger_bars_button	Hide Sanger bars
 indel_button	Paired reads
 pileup_button	Pileup
 paired_pileup_button	Paired pileup

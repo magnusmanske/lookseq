@@ -16,11 +16,6 @@ use File::Basename;
 use Time::HiRes qw( usleep ualarm gettimeofday tv_interval nanosleep );
 use settings ;
 
-if ( $use_sanger_layout ) {
-	use SangerPaths qw(core);
-	use SangerWeb;
-}
-
 my ( $cgi , $myscript , $language ) ;
 my %i18n ;
 
@@ -90,7 +85,6 @@ sub prepare_myscript {
 	my $width = $cgi->param('width') || 1024 ;
 	$myscript .= "var img_width = $width ;\n" ;
 	$myscript .= "var test = $test ;\n" ;
-	$myscript .= "var sanger_layout = $use_sanger_layout ;\n" ;
 	$myscript .= "var display_init = \"" . ( $cgi->param('display') || '' ) . "\" ;\n" ;
 	$myscript .= "var cgi_path = '$cgi_path' ;\n" ;
 	$myscript .= "var language = '$language' ;\n" ;
@@ -154,24 +148,7 @@ sub debug
 sub main {
 	my $sw ;
 
-	if ( $use_sanger_layout ) {
-		my @js_files = ( "$webroot/lookseq.js" ) ;
-		unshift @js_files , "$webroot/custom.js" if -e "$htmlpath/custom.js" ;
-        my $opts = 
-        {
-		    'title'   => $tooltitle,
-		    # 'banner'  => $tooltitle,
-		    'author'  => q(mm6),
-		    'jsfile' => \@js_files,
-		    'onload' => "init()",
-		};
-        $$opts{'inifile'}    = $sanger_header unless !$sanger_header;
-        $$opts{'stylesheet'} = $css_file unless !$css_file;
-	    $sw  = SangerWeb->new($opts);
-	    $cgi = $sw->cgi();
-	} else {
-		$cgi = new CGI ;
-	}
+	$cgi = new CGI ;
 
 	
 	$language = lc ( $cgi->param('display') || 'en' ) ;
@@ -182,30 +159,23 @@ sub main {
 
 	&prepare_myscript ;
 	
-	if ( $use_sanger_layout ) {
-		my $dummy = $sw->header( { 'script' => $myscript } );
-		$dummy =~ s/<script/<meta name="robots" content="robots_flag" \/><script/ ; # Hacking around stupid Sanger cgi object
-		print $dummy ;
-	} else {
-		my @js_files = ( $myscript ,
-						{ -type => 'text/javascript', -src => "$webroot/lookseq.js" }
-						) ;
-		unshift @js_files , { -type => 'text/javascript', -src => "$webroot/custom.js" } if -e "$htmlpath/custom.js" ;
+	my @js_files = ( $myscript ,
+					{ -type => 'text/javascript', -src => "$webroot/lookseq.js" }
+					) ;
+	unshift @js_files , { -type => 'text/javascript', -src => "$webroot/custom.js" } if -e "$htmlpath/custom.js" ;
 
-        print $cgi->header;
-		#print $cgi->start_html ( -script => \@js_files,
-		my $x = $cgi->start_html ( -script => \@js_files,
-								 -onLoad => "init()" ,
-								 -title => $tooltitle,
-								 -meta => {
-									'robots' => $robots_flag
-								 }
-								 );
-        # Make the same header as sanger for html validation
-        $x =~ s{<!DOCTYPE[^>]+>}{<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">};
-        $x =~ s{<html[^>]+>}{<html xmlns="http://www.w3.org/1999/xhtml">};
-        print $x;
-	}
+	print $cgi->header;
+	#print $cgi->start_html ( -script => \@js_files,
+	my $x = $cgi->start_html ( -script => \@js_files,
+							 -onLoad => "init()" ,
+							 -title => $tooltitle,
+							 -meta => {
+								'robots' => $robots_flag
+							 }
+							 );
+	$x =~ s{<!DOCTYPE[^>]+>}{<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">};
+	$x =~ s{<html[^>]+>}{<html xmlns="http://www.w3.org/1999/xhtml">};
+	print $x;
 	
 	my $out = '' ;
     my $layout = $cgi->param('xxx') ? 'test.html' : 'lookseq.html';
@@ -234,11 +204,7 @@ sub main {
 	print "$out" ;
 #	print "!$htmlpath!" ;# print $sw->footer() ; exit ( 0 ) ;
 
-	if ( $use_sanger_layout ) {
-		print $sw->footer() ;
-	} else {
-		print $cgi->end_html() ;
-	}
+	print $cgi->end_html() ;
 }
 
 &main;
