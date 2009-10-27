@@ -16,7 +16,7 @@ our @EXPORT = qw(
 	$cgi_path $annotation_file $snp_file $robots_flag $use_db_index_cutoff $uniqueness_file 
 	$use_mysql $mysql_server $mysql_port $mysql_user $mysql_password @mysql_dbs
 	%lscolor $ls_max_lines
-	$bam_ftp $reference_ftp
+	$bam_ftp $reference_ftp $render_image_command
 	$css_file
 );
 
@@ -89,6 +89,9 @@ $lscolor{'mapqual_zero'} = [0xff, 0x72, 0x00] ;   # mapping quality zero
 # BAM FTP
 our $bam_ftp ;
 our $reference_ftp ;
+
+# BAM C++ render command, if available
+our $render_image_command ;
 
 # Stuff
 our $css_file ;

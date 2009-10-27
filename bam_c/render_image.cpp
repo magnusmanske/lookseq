@@ -43,13 +43,14 @@ class Tbam2png ;
 class Tbam_draw {
 	public :
 	Tbam_draw ( Tbam2png *_base ) ;
-	void set_range () ;
+	virtual void set_range () ;
 	void set_vertical_range ( int a , int b ) ;
 	virtual void draw_single_read ( const bam1_t *b, void *data ) {} ;
 	virtual void draw_paired_read ( const bam1_t *b, void *data) {} ;
 	virtual void merge_into_png ( unsigned char *p , int red , int green , int blue ) ;
 	virtual void merge_all () {} ;
 	virtual postype get_start () { return start ; }
+	virtual int get_neccessary_height () ;
 
 	postype single_offset ;
 
@@ -83,13 +84,26 @@ class Tbam_draw_paired : public Tbam_draw {
 	virtual void hline ( unsigned char *bucket , postype from , postype to , postype y ) ;
 	virtual void paint_arrow ( unsigned char *bucket , postype from , postype to , postype y , bool reverse ) ;
 	inline postype pos2mem ( postype x , postype y , bool outer_right = false ) ;
-	unsigned char *psingle , *ppaired , *psnps , *pconn , *pfaceaway1 , *pfaceaway2 , *pinversions1 , *pinversions2 ;
+	unsigned char *psingle , *ppaired , *psnps , *pconn , *pfaceaway1 , *pfaceaway2 , *pinversions1 , *pinversions2 , *plowq ;
+} ;
+
+class Tbam_draw_coverage : public Tbam_draw_paired {
+	public :
+	Tbam_draw_coverage ( Tbam2png *_base ) ;
+	virtual void set_range () ;
+	virtual int get_neccessary_height () ;
+	virtual void merge_all () ;
+	
+	protected:
+	virtual void hline ( unsigned char *bucket , postype from , postype to , postype y ) ;
+	
+	int *cov ;
 } ;
 
 class Tbam2png {
 	public :
 	Tbam2png () {} ;
-	void init ( string _bamfile , string _region , string _png_out ) ;
+	void init ( string _bamfile , string _region , string _png_out , int _mapq = 0 ) ;
 	void set_options ( string options ) ;
 	
 	// BAM methods
@@ -122,6 +136,7 @@ class Tbam2png {
 	// BAM variables
 	string bam_file , png_file , region ;
 	tmpstruct_t tmp;
+	int mapq ;
 	
 	// PNG variables
 	postype width, height;
@@ -135,6 +150,7 @@ class Tbam2png {
 } ;
 
 Tbam2png *b2p ; // Neccessary for hack around BAM needing static function
+
 
 //////////////////////////////////////////////////////////////////////////////////////
 // Tbam_draw
@@ -151,6 +167,11 @@ void Tbam_draw::set_vertical_range ( int a , int b ) {
 	vstart = a ;
 	vend = b ;
 }
+
+int Tbam_draw::get_neccessary_height () {
+	return base->get_height() ;
+}
+
 
 int Tbam_draw::opt_axis ( postype from , postype to , postype max_steps ) {
 	int step = 1 ;
@@ -276,6 +297,7 @@ Tbam_draw_paired::Tbam_draw_paired ( Tbam2png *_base ) : Tbam_draw ( _base ) {
 	max_mem = w * h ;
 	psingle = alloc_p () ;
 	ppaired = alloc_p () ;
+	plowq = alloc_p () ;
 	psnps = alloc_p () ;
 	pconn = alloc_p () ;
 	pfaceaway1 = alloc_p () ;
@@ -315,6 +337,8 @@ void Tbam_draw_paired::draw_paired_read ( const bam1_t *b, void *data) {
 	}
 	
 	if ( !is_inversion && !is_faceaway && !base->o_pairs ) return ; // No drawing normal pairs if unwanted
+	
+	if ( bucket == ppaired && b->core.qual == 0 ) bucket = plowq ;
 
 	// Paint read
 	paint_single_read ( bucket , b , data , abs(isize) ) ;
@@ -418,31 +442,32 @@ void Tbam_draw_paired::hline ( unsigned char *bucket , postype from , postype to
 	
 //	int mp2 = pos2mem ( to , y , true ) ;
 	int mp2 = from == to && size > w * 2 ? mp1 : pos2mem ( to , y , true ) ;
+
+	if ( mp1 == mp2 ) {
+		if ( *(bucket+mp1) < SATURATION_THRESHOLD ) (*(bucket+mp1))++ ;
+		return ;
+	}
+
 	if ( mp2 < 0 || mp2 >= max_mem ) {
 //		cerr << "OUT-OF-BOUNDS HLINE!" << endl ;
 		return ;
 	}
 	
-	for ( int m = mp1 ; m <= mp2 ; m++ ) {
-		if ( *(bucket+m) < SATURATION_THRESHOLD ) (*(bucket+m))++ ;
+
+	for ( unsigned char *b = bucket + mp1 ; mp1 <= mp2 ; mp1++ , b++ ) {
+		if ( *b < SATURATION_THRESHOLD ) (*b)++ ;
 	}
 }
 
 postype Tbam_draw_paired::pos2mem ( postype x , postype y , bool outer_right ) {
+	if ( x < start || x > end ) return -1 ;
 	y = ( y - vstart ) * h / vsize ;
 	if ( y < 0 || y >= h ) return -1 ;
 	
-	if ( x < start || x > end ) return -1 ;
-
 	x = ( x - start ) * w ;
 
 	if ( outer_right ) {
-		if ( ( x+w ) / size - 1 < x / size ) {
-			x /= size ;
-		} else {
-			x = ( x+w ) / size - 1 ;
-		}
-		
+		x = ( x+w ) / size - 1 < x / size ? x / size : ( x+w ) / size - 1 ;
 		if ( x >= w ) x = w-1 ;
 	} else {
 		x /= size ;
@@ -505,7 +530,10 @@ void Tbam_draw_paired::merge_all () {
 	
 	if ( base->o_linkpairs ) merge_into_png ( pconn , 200 , 200 , 200 ) ;
 	if ( base->o_single ) merge_into_png ( psingle , 0 , 255 , 0 ) ;
-	if ( base->o_pairs ) merge_into_png ( ppaired , 0 , 0 , 255 ) ;
+	if ( base->o_pairs ) {
+		merge_into_png ( plowq , 0xFF , 0x80 , 0x40 ) ;
+		merge_into_png ( ppaired , 0 , 0 , 255 ) ;
+	}
 	if ( base->o_faceaway ) {
 		merge_into_png ( pfaceaway1 , 0 , 128 , 128 ) ;
 		merge_into_png ( pfaceaway2 , 128 , 128 , 0 ) ;
@@ -519,15 +547,132 @@ void Tbam_draw_paired::merge_all () {
 //	render_number ( base->total_snps , 200 , 50 ) ; // Number of SNPs
 }
 
+
+//////////////////////////////////////////////////////////////////////////////////////
+// Tbam_draw_coverage
+
+Tbam_draw_coverage::Tbam_draw_coverage ( Tbam2png *_base ) : Tbam_draw_paired ( _base ) {
+//	left = right = top = bottom = 0 ;
+}
+
+void Tbam_draw_coverage::set_range () {
+	Tbam_draw::set_range () ;
+	cov = new int[size] ;
+	for ( int i = 0 ; i < size ; i++ ) cov[i] = 0 ;
+}
+
+void Tbam_draw_coverage::hline ( unsigned char *bucket , postype from , postype to , postype y ) {
+	if ( from < start ) from = start ;
+	if ( to >= end ) to = end - 1 ;
+	for ( int i = from ; i <= to ; i++ ) cov[i-start]++ ;
+}
+
+int Tbam_draw_coverage::get_neccessary_height () {
+	int max = 1 ;
+
+	int i ;
+	int width = base->get_width() ;
+	int upper = size > width ? width : size ;
+	int *p1 = new int[upper] ;
+	int *p2 = new int[upper] ;
+	for ( i = 0 ; i < upper ; i++ ) p1[i] = p2[i] = 0 ;
+
+	for ( i = 0 ; i < size ; i++ ) {
+		int x = upper * i / size ;
+		p1[x] += cov[i] ;
+		p2[x]++ ;
+	}
+	for ( i = 0 ; i < upper ; i++ ) p1[i] /= p2[i] == 0 ? 1 : p2[i] ;
+	for ( i = 0 ; i < upper ; i++ ) {
+		if ( max < p1[i] ) max = p1[i] ;
+	}
+	delete [] p1 ;
+	delete [] p2 ;
+//	for ( i = 0 ; i < size ; i++ ) {
+//		if ( max < cov[i] ) max = cov[i] ;
+//	}
+	return max+1 ;
+}
+
+void Tbam_draw_coverage::merge_all () {
+	// Clear canvas
+	png_bytep * row_pointers = base->get_row_pointers () ;
+	for ( int y = 0 ; y < base->get_height() ; y++) {
+		png_byte* row = row_pointers[y];
+		for ( int x = 0 ; x < base->get_width() ; x++) {
+			png_byte* ptr = &(row[x*4]);
+			ptr[0] = 255 ;
+			ptr[1] = 255 ;
+			ptr[2] = 255 ;
+			ptr[3] = 255 ;
+		}
+	}
+	
+	int width = base->get_width() ;
+	int height = base->get_height() ;
+	int i ;
+	int *p1 = new int[width] ;
+	int *p2 = new int[width] ;
+	for ( i = 0 ; i < width ; i++ ) p1[i] = p2[i] = 0 ;
+	
+	if ( size >= width ) {
+		for ( i = 0 ; i < size ; i++ ) {
+			int x = width * i / size ;
+			p1[x] += cov[i] ;
+			p2[x]++ ;
+		}
+	} else {
+		for ( i = 0 ; i < size ; i++ ) {
+			for ( int x = width * i / size ; x < width * ( i + 1 ) / size ; x++ ) {
+				p1[x] += cov[i] ;
+				p2[x]++ ;
+			}
+		}
+	}
+	
+	for ( i = 0 ; i < width ; i++ ) p1[i] /= p2[i] == 0 ? 1 : p2[i] ;
+	
+	for ( i = 0 ; i < width ; i++ ) {
+		if ( p1[i] == 0 ) continue ;
+		for ( int j = 0 ; j < p1[i] ; j++ ) {
+			int y = height - j - 1 ;
+			png_byte* row = row_pointers[y];
+			png_byte* ptr = &(row[i*4]);
+			ptr[0] = 0 ;
+			ptr[1] = 0 ;
+			ptr[2] = 255 ;
+			ptr[3] = 255 ;
+		}
+	}
+	
+	
+/*	if ( base->o_linkpairs ) merge_into_png ( pconn , 200 , 200 , 200 ) ;
+	if ( base->o_single ) merge_into_png ( psingle , 0 , 255 , 0 ) ;
+	if ( base->o_pairs ) merge_into_png ( ppaired , 0 , 0 , 255 ) ;
+	if ( base->o_faceaway ) {
+		merge_into_png ( pfaceaway1 , 0 , 128 , 128 ) ;
+		merge_into_png ( pfaceaway2 , 128 , 128 , 0 ) ;
+	}
+	if ( base->o_inversions ) {
+		merge_into_png ( pinversions1 , 128 , 128 , 255 ) ;
+		merge_into_png ( pinversions2 , 128 , 255 , 128 ) ;
+	}
+	if ( base->o_snps ) merge_into_png ( psnps , 255 , 0 , 0 ) ;
+	if ( !base->o_noscale ) draw_axis () ;*/
+//	render_number ( 123 , 200 , 50 ) ; // Number of SNPs
+}
+
+
 //////////////////////////////////////////////////////////////////////////////////////
 // Tbam2png
 
-void Tbam2png::init ( string _bam_file , string _region , string _png_file ) 
+void Tbam2png::init ( string _bam_file , string _region , string _png_file , int _mapq ) 
 {
 	bam_file = _bam_file ;
 	region = _region ;
 	png_file = _png_file ;
 	png_file = _png_file ;
+	mapq = _mapq ;
 	draw = NULL ;
 	refseq = NULL ;
 	width = 1024 ;
@@ -609,13 +754,14 @@ void Tbam2png::read_bam_file () {
 
 
 int Tbam2png::fetch_func(const bam1_t *b, void *data) {  
+	if ( b->core.qual < b2p->mapq ) return 0 ;
 	if ( b->core.flag & BAM_FPROPER_PAIR ) {
 		//if ( b2p->o_pairs ) 
 		b2p->draw->draw_paired_read ( b , data ) ;
 	} else if ( b->core.flag & BAM_FUNMAP ) {
 //		cout << "UNMAPPED\t" ;
 	} else if ( b->core.flag & BAM_FMUNMAP ) {
-//		if ( b2p->o_single ) b2p->draw->draw_single_read ( b , data ) ;
+		if ( b2p->o_single ) b2p->draw->draw_single_read ( b , data ) ;
 	} else if ( b->core.isize != 0 ) {
 		b2p->draw->draw_paired_read ( b , data ) ;
 	} else {
@@ -852,10 +998,12 @@ int main(int argc, char **argv) {
 	bam2char[15] = 'N' ;
 
 	string bam_file , ref_file , png_file , region , options ;
+	string view = "indel" ;
 	int width = 1024 ;
 	int height = 768 ;
 	int vmin = 0 ;
 	int vmax = 1000 ;
+	int mapq = 0 ;
 	static struct option long_options[] = {
 		{ "bam" , optional_argument , 0 , 'b' } ,
 		{ "ref" , optional_argument , 0 , 'r' } ,
@@ -866,6 +1014,8 @@ int main(int argc, char **argv) {
 		{ "vmin" , optional_argument , 0 , 'v' } ,
 		{ "vmax" , optional_argument , 0 , 'V' } ,
 		{ "options" , optional_argument , 0 , 'o' } ,
+		{ "view" , optional_argument , 0 , 'i' } ,
+		{ "mapq" , optional_argument , 0 , 'm' } ,
 //		{ "snpsonly" , optional_argument , &snpsonly , true } ,
 		{ 0 , 0 , 0 , 0 }
 	} ;
@@ -878,10 +1028,12 @@ int main(int argc, char **argv) {
 			case 'p' : png_file = optarg ; break ;
 			case 'R' : region = optarg ; break ;
 			case 'o' : options = optarg ; break ;
+			case 'i' : view = optarg ; break ;
 			case 'w' : width = atoi ( optarg ) ; break ;
 			case 'h' : height = atoi ( optarg ) ; break ;
 			case 'v' : vmin = atoi ( optarg ) ; break ;
 			case 'V' : vmax = atoi ( optarg ) ; break ;
+			case 'm' : mapq = atoi ( optarg ) ; break ;
 		}
 	}
 	
@@ -893,15 +1045,28 @@ int main(int argc, char **argv) {
 
 	b2p = new Tbam2png () ;
 	b2p->refseq_file = ref_file ;
-	b2p->init( bam_file , region , png_file ) ;
+	b2p->init( bam_file , region , png_file , mapq ) ;
 	b2p->set_image_size ( width , height ) ;
-	Tbam_draw_paired dp ( b2p ) ;
-	dp.set_vertical_range ( vmin , vmax ) ;
+	Tbam_draw *dp ;
+	if ( view == "coverage" ) dp = new Tbam_draw_coverage ( b2p ) ;
+	else dp = new Tbam_draw_paired ( b2p ) ;
+	dp->set_vertical_range ( vmin , vmax ) ;
 	b2p->set_options ( options ) ;
+	
+	if ( view == "coverage" ) {
+		b2p->o_linkpairs = false ;
+		b2p->o_snps = false ;
+	}
+	
 	b2p->read_bam_file () ;
+	
+	if ( view == "coverage" ) {
+		height = dp->get_neccessary_height () ;
+		b2p->set_image_size ( width , height ) ;
+	}
 
 	b2p->create_png () ;
-	dp.merge_all () ;
+	dp->merge_all () ;
 
 	b2p->write_png_file((char*)png_file.c_str());
 
@@ -913,5 +1078,7 @@ int main(int argc, char **argv) {
 
 
 \rm render_image ; g++ render_image.cpp -O3 -o render_image -lpng -L . -lbam ; time ./render_image --bam="ftp://ftp.sanger.ac.uk/pub/team112/ag/bam/AC0001-C.bam" --options=pairs,arrows,single,faceaway,inversions,colordepth,snps --ref=/nfs/users/nfs_m/mm6/ftp/ag/Anopheles_gambiae.clean.fa --region="2L" --png=2L.a.png
+
+\rm render_image ; g++ render_image.cpp -O3 -o render_image -lpng -L . -lbam ; cp render_image ~/wwwdev_data_marker3/..
 
 */

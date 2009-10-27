@@ -25,6 +25,7 @@ use settings ;
 use Data::Dumper ;
 use LWP::Simple;
 use Digest::MD5 qw(md5);
+use File::Temp qw/ tempfile tempdir /;
 
 my $cgi = new CGI;
 my $time0 = [gettimeofday];
@@ -190,6 +191,12 @@ if ( $display_pot_snps and defined  $snp_file ) {
 
 my @databases = split ( ',' , $database ) ;
 #print $cgi->header(-type=>'text/plain',-expires=>'-1s'); # For debugging output
+
+if ( defined $render_image_command and 1 == scalar ( @databases ) and -e $render_image_command ) { # Use C code instead
+	exit ( 0 ) if render_bam_file () ;
+}
+
+
 foreach ( @databases ) {
 	if ( $_ =~ /.bam$/ ) {
 		$_ =~ /([a-zA-Z0-9_\-\.]+)/ ;
@@ -2856,6 +2863,127 @@ if ( $output eq 'image' ) {
 	}
 }
 
+
+
+# Call external renderer
+sub render_bam_file {
+	return 0 if $view ne 'indel' and $view ne 'coverage' ;
+	return 0 if 1 != scalar @databases ;
+	my $file = $databases[0] ;
+	return 0 unless $file =~ m/\.bam$/ ;
+	return 0 unless defined $reference_fa ;
+	
+
+	# BAM file
+	my $cwd;
+	if ( $bam_ftp )
+	{
+		# Samtools require chdir to read bam .bai index files.
+		$cwd = `/bin/pwd`;
+		chomp($cwd);
+		$cwd =~ /(.*)/;
+		$cwd = $1;
+		$datapath =~ /(.*)/;
+		$datapath = $1;
+		chdir($datapath) or die "Could not chdir $datapath: $!";
+		$file = "$bam_ftp/$file";
+	}
+	else
+	{
+		$file = "$datapath/$file";
+	}
+
+	# Reference file
+	my $ref_file ;
+	if ( $reference_ftp )
+	{
+		$cwd = `/bin/pwd`;
+		chomp($cwd);
+		$cwd =~ /(.*)/;
+		$cwd = $1;
+		$datapath =~ /(.*)/;
+		$datapath = $1;
+		chdir($datapath) or die "Could not chdir $datapath: $!";
+		$ref_file = "$reference_ftp/$reference_fa";
+	}
+	else
+	{
+		$ref_file = "$datapath/$reference_fa";
+	}
+	
+	# PNG output
+	my ( $tmp_fh , $tmp_fn ) = tempfile ( "LookSeqXXXXXX" , '/tmp' ) ;
+	close $tmp_fh ;
+	
+	# Taint vodoo
+	$file =~ /([a-zA-Z0-9_\-\.\/\:]+)/ ;
+	$file = $1 ;
+	$chromosome =~ /([a-zA-Z0-9_\-\.\/\:]+)/ ;
+	$chromosome = $1 ;
+	$width =~ /(\d+)/ ;
+	$width = $1 ;
+	$height =~ /(\d+)/ ;
+	$height = $1 ;
+	$view =~ /(\w+)/ ;
+	$view = $1 ;
+
+	# Construct command
+	my $cmd = $render_image_command ;
+	$cmd .= " --bam=\"$file\"" ;
+	$cmd .= " --ref=$ref_file" ;
+	$cmd .= " --region=\"$chromosome:$from-$to\"" ;
+	$cmd .= " --png=$tmp_fn" ;
+	$cmd .= " --width=$width" ;
+	$cmd .= " --height=$height" ;
+	$cmd .= " --view=$view" ;
+	$cmd .= " --vmax=$max_insert_size" if $max_insert_size =~ m/^\d+$/ ;
+	
+	my @options ;
+	push @options , 'pairs' if $display_perfect ;
+	push @options , 'snps' if $display_snps and $to - $from < 2000000 ; # HARD SNP CUTOFF; will only show red instead of blue anyway
+	push @options , 'inversions' if $display_inversions ;
+	push @options , 'single' if $display_single ;
+	push @options , 'linkpairs' if $display_pair_links ;
+	push @options , 'noscale' if $display_noscale ;
+	push @options , 'arrows' if $sam_show_read_arrows ;
+	#push @options , 'faceaway' if $display_faceaway ;
+	push @options , 'colordepth' ; # FIXME always on
+# my $display_pot_snps = $display =~ m/\|potsnps\|/ ; # FIXME
+	
+	$cmd .= " --options=" . join ( ',' , @options ) ;
+	$cmd .= " --mapq=$mapq_cutoff" if $mapq_cutoff > 0 ;
+	
+	# Run command and print output
+#	print $cgi->header(-type=>'text/plain',-expires=>'-1s'); # For debugging output
+#	print "$cmd\n" ; exit ( 0 ) ;
+	`$cmd` ;
+#	print -s $tmp_fn ;
+	print $cgi->header(-type=>'image/png',-expires=>'-1s');
+	open PNG , $tmp_fn ;
+	binmode STDOUT ;
+	binmode PNG ;
+	my $buff ;
+	while (read(PNG, $buff, 8 * 2**10)) {
+		print STDOUT $buff;
+	}
+	close PNG ;
+	
+	
+	# Cleanup
+	unlink $tmp_fn ;
+	
+	
+	
+	## --bam=/nfs/users/nfs_m/mm6/ftp/ag/bam/AC0001-C.bam 
+	## --options=snps,pairs,arrows,single,faceaway,inversions,linkpairs,colordepth 
+	## --ref=/nfs/users/nfs_m/mm6/ftp/ag/Anopheles_gambiae.clean.fa 
+	# --region="2L:1-200000" 
+	## --png=2L.a.png
+	
+#	print "$file\n" ;
+#			sam_read_data($file);
+	return 1 ;
+}
 
 
 
