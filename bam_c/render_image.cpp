@@ -986,10 +986,10 @@ int die_usage () {
 	cout << "-v --vmin    NUMBER   Vertical lower limit (0)" << endl ;
 	cout << "-V --vmax    NUMBER   Vertical upper limit (1000)" << endl ;
 	cout << "-r --ref     FILE     Reference sequence" << endl ;
-	cout << "-o --options TEXT     arrows,snps,pairs,single,faceaway" << endl ;
+	cout << "-i --view    TEXT     coverage or indel (default)" << endl ;
+	cout << "-o --options TEXT     arrows,snps,pairs,single,faceaway,inversions,linkpairs,colordepth,noscale" << endl ;
 	return 0 ;
 }
-
 
 int main(int argc, char **argv) {
 	for ( int a = 0 ; a < 256 ; a++ ) bam2char[a] = '?' ;
