@@ -127,7 +127,7 @@ class Tbam2png {
 	Tbam_draw *draw ;
 	bool o_single , o_pairs , o_arrows , o_snps , o_faceaway , o_inversions , o_linkpairs , o_colordepth ;
 	bool o_noscale ;
-	int total_snps ;
+	int total_snps , total_reads ;
 	
 	private :
 
@@ -544,7 +544,7 @@ void Tbam_draw_paired::merge_all () {
 	}
 	if ( base->o_snps ) merge_into_png ( psnps , 255 , 0 , 0 ) ;
 	if ( !base->o_noscale ) draw_axis () ;
-//	render_number ( base->total_snps , 200 , 50 ) ; // Number of SNPs
+//	render_number ( base->total_reads , 200 , 50 ) ;
 }
 
 
@@ -747,6 +747,7 @@ void Tbam2png::read_bam_file () {
 	
 	draw->set_range () ;
 	total_snps = 0 ;
+	total_reads = 0 ;
 	bam_fetch(tmp.in->x.bam, idx, ref, tmp.beg, tmp.end, NULL, fetch_func);  
 	bam_index_destroy(idx);  
 //	cout << "Total SNPs : " << total_snps << endl ;
@@ -755,6 +756,7 @@ void Tbam2png::read_bam_file () {
 
 int Tbam2png::fetch_func(const bam1_t *b, void *data) {  
 	if ( b->core.qual < b2p->mapq ) return 0 ;
+	b2p->total_reads++ ;
 	if ( b->core.flag & BAM_FPROPER_PAIR ) {
 		//if ( b2p->o_pairs ) 
 		b2p->draw->draw_paired_read ( b , data ) ;
