@@ -118,6 +118,7 @@ sub prepare_myscript {
 		$myscript .= "var use_init = true ;\nvar init_chr = \"$chrom\" ;\nvar init_from = $from ;\nvar init_to = $to ;\nvar init_mode = \"$mode\" ;\nvar init_lane = \"$lane\" ;\n" ;
 	} else {
 		$myscript .= "var use_init = false ;\n" ;
+		$myscript .= "var init_max_window=0;\n";
 	}
 }
 
