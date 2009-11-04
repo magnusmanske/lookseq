@@ -26,6 +26,10 @@ using namespace std ;
 #define NUMBER_ALIGN_RIGHT 2
 #define NUMBER_ALIGN_VCENTER 4
 
+#define PC_EMPTY 0
+#define PC_REFERENCE 1
+#define PC_SNP 2
+
 typedef long postype ;
 
 typedef struct {  
@@ -35,10 +39,19 @@ typedef struct {
 
 typedef vector <postype> TVI ;
 
-vector <TVI> numbers ;
+vector <TVI> lcd_chars ;
 char bam2char[255] ;
 
 class Tbam2png ;
+
+class Tpileupchar {
+	public :
+	Tpileupchar ( char _c = ' ' , char _type = PC_EMPTY ) { c = _c ; type = _type ; }
+	char c ;
+	char type ;
+} ;
+
+typedef vector <Tpileupchar> VPC ;
 
 class Tbam_draw {
 	public :
@@ -55,7 +68,7 @@ class Tbam_draw {
 	postype single_offset ;
 
 	protected :
-	virtual void render_digit ( int digit , int x , int y ) ;
+	virtual void render_char ( char ch , int x , int y ) ;
 	virtual void render_number ( int number , int x , int y , int align = 0 ) ;
 	virtual void draw_axis () {} ;
 //	virtual postype pos2mem ( postype x , postype y , bool outer_right = false ) { return -1 ; } ;
@@ -69,6 +82,7 @@ class Tbam_draw {
 	postype left , right , top , bottom , w , h ;
 	postype start , end , size ;
 	postype vstart , vend , vsize ;
+	int basecol_red , basecol_green , basecol_blue ;
 } ;
 
 class Tbam_draw_paired : public Tbam_draw {
@@ -95,9 +109,27 @@ class Tbam_draw_coverage : public Tbam_draw_paired {
 	virtual void merge_all () ;
 	
 	protected:
+	virtual void draw_axis () ;
 	virtual void hline ( unsigned char *bucket , postype from , postype to , postype y ) ;
 	
 	int *cov ;
+} ;
+
+class Tbam_draw_pileup : public Tbam_draw_paired {
+	public :
+	Tbam_draw_pileup ( Tbam2png *_base ) ;
+	virtual void set_range () ;
+	virtual int get_neccessary_height () ;
+	virtual void merge_all () ;
+	
+	protected:
+	virtual void draw_axis () ;
+	virtual void hline ( unsigned char *bucket , postype from , postype to , postype y ) ;
+	virtual void paint_single_read ( unsigned char *bucket , const bam1_t *b, void *data , int y ) ;
+	void get_pileup_read_start ( const bam1_t *b , int &row , int &pos ) ;
+	
+	vector <VPC> pile ;
+	bool render_as_text ;
 } ;
 
 class Tbam2png {
@@ -161,6 +193,7 @@ Tbam_draw::Tbam_draw ( Tbam2png *_base ) {
 	vstart = 0 ;
 	vend = 1000 ;
 	single_offset = 0 ;
+	basecol_red = basecol_green = basecol_blue = 0 ;
 }
 
 void Tbam_draw::set_vertical_range ( int a , int b ) {
@@ -184,12 +217,10 @@ int Tbam_draw::opt_axis ( postype from , postype to , postype max_steps ) {
 	return step ;
 }
 
-void Tbam_draw::render_digit ( int digit , int x , int y ) {
-	if ( digit < 0 || digit > 9 ) return ;
-//	cout << x << endl ;
-//	cout << "Rendering " << digit << "\n" ;
-	for ( int a = 0 ; a < numbers[digit].size() ; a++ ) {
-		int b = numbers[digit][a] ;
+void Tbam_draw::render_char ( char ch , int x , int y ) {
+//	if ( digit < 0 || digit > 9 ) return ;
+	for ( int a = 0 ; a < lcd_chars[ch].size() ; a++ ) {
+		int b = lcd_chars[ch][a] ;
 		int ox = x , oy = y ;
 		switch ( b ) {
 			case 0 : break ;
@@ -199,11 +230,12 @@ void Tbam_draw::render_digit ( int digit , int x , int y ) {
 			case 4 : oy += NUMBER_HEIGHT/2 ; break ;
 			case 5 : ox += NUMBER_WIDTH ; oy += NUMBER_HEIGHT/2 ; break ;
 			case 6 : oy += NUMBER_HEIGHT ; break ;
+			case 7 : ox += NUMBER_WIDTH/2 ; b = 1 ; break ;
+			case 8 : ox += NUMBER_WIDTH/2 ; oy += NUMBER_HEIGHT/2 ; b = 1 ; break ;
 		}
 		if ( b == 0 || b == 3 || b == 6 ) {
 			for ( int a = 1 ; a < NUMBER_WIDTH ; a++ ) {
 				set_pixel ( ox + a , oy ) ;
-//				cout << (ox+a) << "\t" << oy << endl ;
 			}
 		} else {
 			for ( int a = 1 ; a < NUMBER_HEIGHT / 2 ; a++ ) {
@@ -226,7 +258,7 @@ void Tbam_draw::render_number ( int number , int x , int y , int align ) {
 	if ( align & NUMBER_ALIGN_VCENTER ) y -= NUMBER_HEIGHT / 2 ;
 	
 	for ( char *c = num ; *c ; c++ ) {
-		render_digit ( *c-'0' , x , y ) ;
+		render_char ( *c , x , y ) ;
 		x += dw ;
 	}
 }
@@ -237,7 +269,9 @@ void Tbam_draw::set_pixel ( int x , int y ) {
 	png_bytep * row_pointers = base->get_row_pointers () ;
 	png_byte* row = row_pointers[y];
 	png_byte* ptr = &(row[x*4]);
-	ptr[0]=ptr[1]=ptr[2]=0 ;
+	ptr[0] = basecol_red ;
+	ptr[1] = basecol_green ;
+	ptr[2] = basecol_blue ;
 	ptr[3] = 255 ;
 }
 
@@ -594,6 +628,18 @@ int Tbam_draw_coverage::get_neccessary_height () {
 	return max+1 ;
 }
 
+void Tbam_draw_coverage::draw_axis () {
+	postype a ;
+	postype bot = base->get_height() ;
+	
+	postype step_v = opt_axis ( 0 , bot , bot/20 ) ;
+	for ( a = 1 ; a * step_v <= bot ; a++ ) {
+		postype y = bot - a * step_v ;
+		for ( postype b = 0 ; b < 5 ; b++ ) set_pixel ( b , y ) ;
+		render_number ( a * step_v , 7 , y , NUMBER_ALIGN_VCENTER ) ;
+	}
+}
+
 void Tbam_draw_coverage::merge_all () {
 	// Clear canvas
 	png_bytep * row_pointers = base->get_row_pointers () ;
@@ -645,22 +691,163 @@ void Tbam_draw_coverage::merge_all () {
 		}
 	}
 	
-	
-/*	if ( base->o_linkpairs ) merge_into_png ( pconn , 200 , 200 , 200 ) ;
-	if ( base->o_single ) merge_into_png ( psingle , 0 , 255 , 0 ) ;
-	if ( base->o_pairs ) merge_into_png ( ppaired , 0 , 0 , 255 ) ;
-	if ( base->o_faceaway ) {
-		merge_into_png ( pfaceaway1 , 0 , 128 , 128 ) ;
-		merge_into_png ( pfaceaway2 , 128 , 128 , 0 ) ;
-	}
-	if ( base->o_inversions ) {
-		merge_into_png ( pinversions1 , 128 , 128 , 255 ) ;
-		merge_into_png ( pinversions2 , 128 , 255 , 128 ) ;
-	}
-	if ( base->o_snps ) merge_into_png ( psnps , 255 , 0 , 0 ) ;
-	if ( !base->o_noscale ) draw_axis () ;*/
-//	render_number ( 123 , 200 , 50 ) ; // Number of SNPs
+	//if ( !base->o_noscale ) 
+	draw_axis () ;
 }
+
+
+//////////////////////////////////////////////////////////////////////////////////////
+// Tbam2png
+Tbam_draw_pileup::Tbam_draw_pileup ( Tbam2png *_base ) : Tbam_draw_paired ( _base ) {
+}
+
+void Tbam_draw_pileup::set_range () {
+	Tbam_draw_paired::set_range() ;
+}
+
+int Tbam_draw_pileup::get_neccessary_height () {
+	render_as_text = base->get_width() >= NUMBER_WIDTH * size ;
+	if ( render_as_text ) return (pile.size()+2)*10 + 2 ;
+	return (pile.size()+2) ;
+}
+
+void Tbam_draw_pileup::draw_axis () {
+}
+
+void Tbam_draw_pileup::get_pileup_read_start ( const bam1_t *b , int &row , int &pos ) {
+	pos = b->core.pos + 1 - start ;
+	for ( row = 0 ; row < pile.size() ; row++ ) {
+		bool occupied = false ;
+		postype p = b->core.pos + 1 ;
+		for ( postype a = -1 ; a < b->core.l_qseq + 1 ; a++ , p++ ) {
+			if ( p < start ) continue ;
+			if ( p >= end ) break ;
+			if ( pile[row][pos+a].type == PC_EMPTY ) continue ;
+			occupied = true ;
+			break ;
+		}
+		if ( occupied ) continue ;
+		return ;
+	}
+	
+	row = pile.size() ;
+	pile.push_back ( VPC ( size , Tpileupchar() ) ) ;
+//	for ( int i = start ; i < end ; i++ ) pile[row].push_back ( Tpileupchar () ) ;
+}
+
+void Tbam_draw_pileup::paint_single_read ( unsigned char *bucket , const bam1_t *b, void *data , int y ) {
+	postype from , to ;
+	// TODO use bam_cigar2qlen, maybe
+	if ( b->core.n_cigar == 1 ) {
+		from = b->core.pos ;
+		to = from + b->core.l_qseq - 1 ;
+	} else { // FIXME cigar
+		from = b->core.pos ;
+		to = from + b->core.l_qseq - 1 ;
+	}
+	
+	if ( y < vstart || y >= vend ) return ;
+	
+	int pile_row , pile_pos ;
+	get_pileup_read_start ( b , pile_row , pile_pos ) ;
+
+	uint8_t *s = bam1_seq ( b ) ;
+	postype p = b->core.pos + 1 ;
+	for ( postype a = 0 ; a < b->core.l_qseq ; a++ , p++ , pile_pos++ ) {
+		if ( p < start ) continue ;
+		if ( p >= end ) break ;
+
+		char base_read = bam2char[bam1_seqi(s,a)] ;
+		char base_ref = base->refseq ? *(base->refseq+p-start) : base_read ;
+		pile[pile_row][pile_pos].c = base_read ;
+		if ( base_read == base_ref ) {
+			pile[pile_row][pile_pos].type = PC_REFERENCE ;
+		} else {
+			pile[pile_row][pile_pos].type = PC_SNP ;
+		}
+	}
+}
+
+void Tbam_draw_pileup::hline ( unsigned char *bucket , postype from , postype to , postype y ) {
+}
+
+void Tbam_draw_pileup::merge_all () {
+	// Clear canvas
+	png_bytep * row_pointers = base->get_row_pointers () ;
+	for ( int y = 0 ; y < base->get_height() ; y++) {
+		png_byte* row = row_pointers[y];
+		for ( int x = 0 ; x < base->get_width() ; x++) {
+			png_byte* ptr = &(row[x*4]);
+			ptr[0] = 255 ;
+			ptr[1] = 255 ;
+			ptr[2] = 255 ;
+			ptr[3] = 255 ;
+		}
+	}
+	
+	int width = base->get_width() ;
+	int height = base->get_height() ;
+	
+	
+	if ( render_as_text ) { // Bases as text
+		for ( int row = 0 ; row < pile.size() ; row++ ) {
+			int y = height - ( row + 3 ) * 10 ;
+			for ( int col = 0 ; col < pile[row].size() && col < size ; col++ ) {
+				if ( pile[row][col].type == PC_EMPTY ) continue ;
+				
+				int x = col * width / size ;
+				if ( pile[row][col].type == PC_REFERENCE ) { basecol_red = basecol_green = 0 ; basecol_blue = 255 ; }
+				else if ( pile[row][col].type == PC_SNP ) { basecol_red = 255 ; basecol_green = basecol_blue = 0 ; }
+				render_char ( pile[row][col].c , x , y ) ;
+			}
+		}
+		
+		basecol_red = basecol_green = basecol_blue = 0 ;
+
+		if ( base->refseq ) {
+			int y = height - 10 ;
+			for ( int col = 0 ; col < size ; col++ ) {
+				char c = *(base->refseq+col) ;
+				int x = col * width / size ;
+				render_char ( c , x , y ) ;
+			}
+		}
+		
+	} else { // Bases as dots
+	
+		// Reference
+		basecol_red = basecol_green = 0 ; basecol_blue = 255 ;
+		for ( int row = 0 ; row < pile.size() ; row++ ) {
+			int y = height - ( row + 1 ) ;
+			for ( int col = 0 ; col < pile[row].size() && col < size ; col++ ) {
+				if ( pile[row][col].type != PC_REFERENCE ) continue ;
+				
+				int x = col * width / size ;
+				set_pixel ( x , y ) ;
+			}
+		}
+
+		// SNPs
+		basecol_red = 255 ; basecol_green = basecol_blue = 0 ;
+		for ( int row = 0 ; row < pile.size() ; row++ ) {
+			int y = height - ( row + 1 ) ;
+			for ( int col = 0 ; col < pile[row].size() && col < size ; col++ ) {
+				if ( pile[row][col].type != PC_SNP ) continue ;
+				
+				int x = col * width / size ;
+				set_pixel ( x , y ) ;
+			}
+		}
+		
+		basecol_red = basecol_green = basecol_blue = 0 ;
+	}
+
+
+	//if ( !base->o_noscale ) 
+	draw_axis () ;
+}
+
+
 
 
 //////////////////////////////////////////////////////////////////////////////////////
@@ -915,66 +1102,89 @@ void Tbam2png::abort_(const char * s, ...)
 
 // MAIN STUFF
 
-void init_numbers () {
-	for ( int a = 0 ; a < 10 ; a++ ) numbers.push_back ( TVI() ) ;
-	numbers[0].push_back(0);
-	numbers[0].push_back(1);
-	numbers[0].push_back(2);
-	numbers[0].push_back(4);
-	numbers[0].push_back(5);
-	numbers[0].push_back(6);
+void init_lcd_chars () {
+	for ( int a = 0 ; a < 256 ; a++ ) lcd_chars.push_back ( TVI() ) ;
+	lcd_chars['0'].push_back(0);
+	lcd_chars['0'].push_back(1);
+	lcd_chars['0'].push_back(2);
+	lcd_chars['0'].push_back(4);
+	lcd_chars['0'].push_back(5);
+	lcd_chars['0'].push_back(6);
 	
-	numbers[1].push_back(2);
-	numbers[1].push_back(5);
+	lcd_chars['1'].push_back(2);
+	lcd_chars['1'].push_back(5);
 	
-	numbers[2].push_back(0);
-	numbers[2].push_back(2);
-	numbers[2].push_back(3);
-	numbers[2].push_back(4);
-	numbers[2].push_back(6);
+	lcd_chars['2'].push_back(0);
+	lcd_chars['2'].push_back(2);
+	lcd_chars['2'].push_back(3);
+	lcd_chars['2'].push_back(4);
+	lcd_chars['2'].push_back(6);
 	
-	numbers[3].push_back(0);
-	numbers[3].push_back(2);
-	numbers[3].push_back(3);
-	numbers[3].push_back(5);
-	numbers[3].push_back(6);
+	lcd_chars['3'].push_back(0);
+	lcd_chars['3'].push_back(2);
+	lcd_chars['3'].push_back(3);
+	lcd_chars['3'].push_back(5);
+	lcd_chars['3'].push_back(6);
 	
-	numbers[4].push_back(1);
-	numbers[4].push_back(2);
-	numbers[4].push_back(3);
-	numbers[4].push_back(5);
+	lcd_chars['4'].push_back(1);
+	lcd_chars['4'].push_back(2);
+	lcd_chars['4'].push_back(3);
+	lcd_chars['4'].push_back(5);
 	
-	numbers[5].push_back(0);
-	numbers[5].push_back(1);
-	numbers[5].push_back(3);
-	numbers[5].push_back(5);
-	numbers[5].push_back(6);
+	lcd_chars['5'].push_back(0);
+	lcd_chars['5'].push_back(1);
+	lcd_chars['5'].push_back(3);
+	lcd_chars['5'].push_back(5);
+	lcd_chars['5'].push_back(6);
 	
-	numbers[6].push_back(0);
-	numbers[6].push_back(1);
-	numbers[6].push_back(3);
-	numbers[6].push_back(4);
-	numbers[6].push_back(5);
-	numbers[6].push_back(6);
+	lcd_chars['6'].push_back(0);
+	lcd_chars['6'].push_back(1);
+	lcd_chars['6'].push_back(3);
+	lcd_chars['6'].push_back(4);
+	lcd_chars['6'].push_back(5);
+	lcd_chars['6'].push_back(6);
 	
-	numbers[7].push_back(0);
-	numbers[7].push_back(2);
-	numbers[7].push_back(5);
+	lcd_chars['7'].push_back(0);
+	lcd_chars['7'].push_back(2);
+	lcd_chars['7'].push_back(5);
 	
-	numbers[8].push_back(0);
-	numbers[8].push_back(1);
-	numbers[8].push_back(2);
-	numbers[8].push_back(3);
-	numbers[8].push_back(4);
-	numbers[8].push_back(5);
-	numbers[8].push_back(6);
+	lcd_chars['8'].push_back(0);
+	lcd_chars['8'].push_back(1);
+	lcd_chars['8'].push_back(2);
+	lcd_chars['8'].push_back(3);
+	lcd_chars['8'].push_back(4);
+	lcd_chars['8'].push_back(5);
+	lcd_chars['8'].push_back(6);
 	
-	numbers[9].push_back(0);
-	numbers[9].push_back(1);
-	numbers[9].push_back(2);
-	numbers[9].push_back(3);
-	numbers[9].push_back(5);
-	numbers[9].push_back(6);
+	lcd_chars['9'].push_back(0);
+	lcd_chars['9'].push_back(1);
+	lcd_chars['9'].push_back(2);
+	lcd_chars['9'].push_back(3);
+	lcd_chars['9'].push_back(5);
+	lcd_chars['9'].push_back(6);
+	
+	lcd_chars['A'].push_back(0);
+	lcd_chars['A'].push_back(1);
+	lcd_chars['A'].push_back(2);
+	lcd_chars['A'].push_back(3);
+	lcd_chars['A'].push_back(4);
+	lcd_chars['A'].push_back(5);
+	
+	lcd_chars['C'].push_back(0);
+	lcd_chars['C'].push_back(1);
+	lcd_chars['C'].push_back(4);
+	lcd_chars['C'].push_back(6);
+
+	lcd_chars['G'].push_back(0);
+	lcd_chars['G'].push_back(1);
+	lcd_chars['G'].push_back(3);
+	lcd_chars['G'].push_back(4);
+	lcd_chars['G'].push_back(5);
+	lcd_chars['G'].push_back(6);
+	
+	lcd_chars['T'].push_back(0);
+	lcd_chars['T'].push_back(7);
+	lcd_chars['T'].push_back(8);
 }
 
 
@@ -1039,7 +1249,7 @@ int main(int argc, char **argv) {
 		}
 	}
 	
-	init_numbers () ;
+	init_lcd_chars () ;
 	
 	if ( bam_file.empty() ) return die_usage () ;
 	if ( png_file.empty() ) return die_usage () ;
@@ -1051,6 +1261,7 @@ int main(int argc, char **argv) {
 	b2p->set_image_size ( width , height ) ;
 	Tbam_draw *dp ;
 	if ( view == "coverage" ) dp = new Tbam_draw_coverage ( b2p ) ;
+	else if ( view == "pileup" ) dp = new Tbam_draw_pileup ( b2p ) ;
 	else dp = new Tbam_draw_paired ( b2p ) ;
 	dp->set_vertical_range ( vmin , vmax ) ;
 	b2p->set_options ( options ) ;
@@ -1058,14 +1269,21 @@ int main(int argc, char **argv) {
 	if ( view == "coverage" ) {
 		b2p->o_linkpairs = false ;
 		b2p->o_snps = false ;
+	} else if ( view == "pileup" ) {
+		b2p->o_linkpairs = false ;
 	}
+
 	
 	b2p->read_bam_file () ;
 	
 	if ( view == "coverage" ) {
 		height = dp->get_neccessary_height () ;
 		b2p->set_image_size ( width , height ) ;
+	} else if ( view == "pileup" ) {
+		height = dp->get_neccessary_height () ;
+		b2p->set_image_size ( width , height ) ;
 	}
+
 
 	b2p->create_png () ;
 	dp->merge_all () ;

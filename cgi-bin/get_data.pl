@@ -2867,7 +2867,7 @@ if ( $output eq 'image' ) {
 
 # Call external renderer
 sub render_bam_file {
-	return 0 if $view ne 'indel' and $view ne 'coverage' ;
+	return 0 if $view ne 'indel' and $view ne 'coverage' and $view ne 'pileup' ;
 	return 0 if 1 != scalar @databases ;
 	my $file = $databases[0] ;
 	return 0 unless $file =~ m/\.bam$/ ;
