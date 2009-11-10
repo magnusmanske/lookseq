@@ -2946,6 +2946,7 @@ sub render_bam_file {
 	push @options , 'linkpairs' if $display_pair_links ;
 	push @options , 'noscale' if $display_noscale ;
 	push @options , 'arrows' if $sam_show_read_arrows ;
+	push @options , 'readqual' if $sam_show_read_quality ;
 	#push @options , 'faceaway' if $display_faceaway ;
 	push @options , 'colordepth' ; # FIXME always on
 # my $display_pot_snps = $display =~ m/\|potsnps\|/ ; # FIXME
