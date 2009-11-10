@@ -46,9 +46,10 @@ class Tbam2png ;
 
 class Tpileupchar {
 	public :
-	Tpileupchar ( char _c = ' ' , char _type = PC_EMPTY ) { c = _c ; type = _type ; }
+	Tpileupchar ( char _c = ' ' , char _type = PC_EMPTY , char _q = -1 ) { c = _c ; type = _type ; quality = _q ; }
 	char c ;
 	char type ;
+	char quality ;
 } ;
 
 typedef vector <Tpileupchar> VPC ;
@@ -69,6 +70,7 @@ class Tbam_draw {
 
 	protected :
 	virtual void render_char ( char ch , int x , int y ) ;
+	virtual void fill_rect ( int x1 , int y1 , int x2 , int y2 , int r , int g , int b ) ;
 	virtual void render_number ( int number , int x , int y , int align = 0 ) ;
 	virtual void draw_axis () {} ;
 //	virtual postype pos2mem ( postype x , postype y , bool outer_right = false ) { return -1 ; } ;
@@ -158,7 +160,7 @@ class Tbam2png {
 	
 	Tbam_draw *draw ;
 	bool o_single , o_pairs , o_arrows , o_snps , o_faceaway , o_inversions , o_linkpairs , o_colordepth ;
-	bool o_noscale ;
+	bool o_noscale , o_readqual ;
 	int total_snps , total_reads ;
 	
 	private :
@@ -215,6 +217,35 @@ int Tbam_draw::opt_axis ( postype from , postype to , postype max_steps ) {
 		step *= 2 ;
 	}
 	return step ;
+}
+
+void Tbam_draw::fill_rect ( int x1 , int y1 , int x2 , int y2 , int r , int g , int b ) {
+	if ( x1 > x2 ) { int x = x1 ; x1 = x2 ; x2 = x ; }
+	if ( y1 > y2 ) { int y = y1 ; y1 = y2 ; y2 = y ; }
+	
+	if ( x1 < 0 ) x1 = 0 ;
+	if ( y1 < 0 ) y1 = 0 ;
+	if ( x2 >= base->get_width()) x2 = base->get_width() - 1 ;
+	if ( y2 >= base->get_height() ) y2 = base->get_height() - 1 ;
+	if ( x1 > x2 || y1 > y2 ) return ;
+
+	int r2 = basecol_red ;
+	int g2 = basecol_green ;
+	int b2 = basecol_blue ;
+	
+	basecol_red = r ;
+	basecol_green = r ;
+	basecol_blue = r ;
+	
+	for ( int x = x1 ; x <= x2 ; x++ ) {
+		for ( int y = y1 ; y <= y2 ; y++ ) {
+			set_pixel ( x , y ) ;
+		}
+	}
+	
+	basecol_red = r2 ;
+	basecol_green = r2 ;
+	basecol_blue = r2 ;
 }
 
 void Tbam_draw::render_char ( char ch , int x , int y ) {
@@ -753,13 +784,15 @@ void Tbam_draw_pileup::paint_single_read ( unsigned char *bucket , const bam1_t 
 
 	uint8_t *s = bam1_seq ( b ) ;
 	postype p = b->core.pos + 1 ;
-	for ( postype a = 0 ; a < b->core.l_qseq ; a++ , p++ , pile_pos++ ) {
+	char *q = (char*) bam1_qual(b) ;
+	for ( postype a = 0 ; a < b->core.l_qseq ; a++ , p++ , pile_pos++ , q++ ) {
 		if ( p < start ) continue ;
 		if ( p >= end ) break ;
 
 		char base_read = bam2char[bam1_seqi(s,a)] ;
 		char base_ref = base->refseq ? *(base->refseq+p-start) : base_read ;
 		pile[pile_row][pile_pos].c = base_read ;
+		pile[pile_row][pile_pos].quality = *q ;
 		if ( base_read == base_ref ) {
 			pile[pile_row][pile_pos].type = PC_REFERENCE ;
 		} else {
@@ -788,14 +821,21 @@ void Tbam_draw_pileup::merge_all () {
 	int width = base->get_width() ;
 	int height = base->get_height() ;
 	
+	bool use_quality = base->o_readqual ;
 	
 	if ( render_as_text ) { // Bases as text
+		int row_height = 10 ;
 		for ( int row = 0 ; row < pile.size() ; row++ ) {
-			int y = height - ( row + 3 ) * 10 ;
+			int y = height - ( row + 3 ) * row_height ;
 			for ( int col = 0 ; col < pile[row].size() && col < size ; col++ ) {
 				if ( pile[row][col].type == PC_EMPTY ) continue ;
 				
 				int x = col * width / size ;
+				if ( use_quality && pile[row][col].quality != -1 ) {
+					int i = pile[row][col].quality * 6 ; // FIXME if quality > 40
+					if ( i > 255 ) i = 255 ;
+					fill_rect ( x-1 , y-1 , ( col + 1 ) * width / size - 2 , y + row_height - 2 , i , i , i ) ;
+				}
 				if ( pile[row][col].type == PC_REFERENCE ) { basecol_red = basecol_green = 0 ; basecol_blue = 255 ; }
 				else if ( pile[row][col].type == PC_SNP ) { basecol_red = 255 ; basecol_green = basecol_blue = 0 ; }
 				render_char ( pile[row][col].c , x , y ) ;
@@ -803,7 +843,7 @@ void Tbam_draw_pileup::merge_all () {
 		}
 		
 		basecol_red = basecol_green = basecol_blue = 0 ;
-
+		
 		if ( base->refseq ) {
 			int y = height - 10 ;
 			for ( int col = 0 ; col < size ; col++ ) {
@@ -821,6 +861,15 @@ void Tbam_draw_pileup::merge_all () {
 			int y = height - ( row + 1 ) ;
 			for ( int col = 0 ; col < pile[row].size() && col < size ; col++ ) {
 				if ( pile[row][col].type != PC_REFERENCE ) continue ;
+
+				if ( use_quality ) {
+					int i ;
+					if ( pile[row][col].quality != -1 ) {
+						i = pile[row][col].quality * 6 ; // FIXME if quality > 40
+						if ( i > 255 ) i = 255 ;
+					} else i = 255 ;
+					basecol_blue = i ;
+				}
 				
 				int x = col * width / size ;
 				set_pixel ( x , y ) ;
@@ -834,6 +883,15 @@ void Tbam_draw_pileup::merge_all () {
 			for ( int col = 0 ; col < pile[row].size() && col < size ; col++ ) {
 				if ( pile[row][col].type != PC_SNP ) continue ;
 				
+				if ( use_quality ) {
+					int i ;
+					if ( pile[row][col].quality != -1 ) {
+						i = pile[row][col].quality * 6 ; // FIXME if quality > 40
+						if ( i > 255 ) i = 255 ;
+					} else i = 255 ;
+					basecol_red = i ;
+				}
+
 				int x = col * width / size ;
 				set_pixel ( x , y ) ;
 			}
@@ -865,7 +923,7 @@ void Tbam2png::init ( string _bam_file , string _region , string _png_file , int
 	width = 1024 ;
 	height = 768 ;
 	o_single = o_pairs = o_arrows = o_snps = o_faceaway = o_inversions = o_linkpairs = o_colordepth = false ;
-	o_noscale = false ;
+	o_noscale = o_readqual = false ;
 }
 
 void Tbam2png::set_image_size ( postype w , postype h ) {
@@ -895,6 +953,7 @@ void Tbam2png::set_options ( string options ) {
 		else if ( ov[a] == "linkpairs" ) o_linkpairs = true ;
 		else if ( ov[a] == "colordepth" ) o_colordepth = true ;
 		else if ( ov[a] == "noscale" ) o_noscale = true ;
+		else if ( ov[a] == "readqual" ) o_readqual = true ;
 	}
 	
 	if ( o_single ) draw->single_offset = 50 ;
