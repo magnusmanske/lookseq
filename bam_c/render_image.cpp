@@ -871,8 +871,13 @@ void Tbam_draw_pileup::merge_all () {
 					basecol_blue = i ;
 				}
 				
-				int x = col * width / size ;
-				set_pixel ( x , y ) ;
+				int x1 = col * width / size ;
+				int x2 = ( col + 1 ) * width / size - 1 ;
+				if ( x1 > x2 ) x2 = x1 ;
+				for ( int x = x1 ; x <= x2 ; x++ ) {
+					set_pixel ( x , y ) ;
+				}
+				
 			}
 		}
 
@@ -892,8 +897,13 @@ void Tbam_draw_pileup::merge_all () {
 					basecol_red = i ;
 				}
 
-				int x = col * width / size ;
-				set_pixel ( x , y ) ;
+				int x1 = col * width / size ;
+				int x2 = ( col + 1 ) * width / size - 1 ;
+				if ( x1 > x2 ) x2 = x1 ;
+				for ( int x = x1 ; x <= x2 ; x++ ) {
+					set_pixel ( x , y ) ;
+				}
+				
 			}
 		}
 		
