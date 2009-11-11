@@ -17,7 +17,7 @@
 
 using namespace std ;
 
-#define ARROW_LENGTH 4
+#define ARROW_LENGTH 3
 #define SATURATION_THRESHOLD 64
 
 #define NUMBER_WIDTH 4
@@ -29,6 +29,7 @@ using namespace std ;
 #define PC_EMPTY 0
 #define PC_REFERENCE 1
 #define PC_SNP 2
+#define PC_SINGLE 4
 
 typedef long postype ;
 
@@ -798,6 +799,7 @@ void Tbam_draw_pileup::paint_single_read ( unsigned char *bucket , const bam1_t 
 		} else {
 			pile[pile_row][pile_pos].type = PC_SNP ;
 		}
+		if ( b->core.flag & BAM_FMUNMAP ) pile[pile_row][pile_pos].type |= PC_SINGLE ;
 	}
 }
 
@@ -836,8 +838,9 @@ void Tbam_draw_pileup::merge_all () {
 					if ( i > 255 ) i = 255 ;
 					fill_rect ( x-1 , y-1 , ( col + 1 ) * width / size - 2 , y + row_height - 2 , i , i , i ) ;
 				}
-				if ( pile[row][col].type == PC_REFERENCE ) { basecol_red = basecol_green = 0 ; basecol_blue = 255 ; }
-				else if ( pile[row][col].type == PC_SNP ) { basecol_red = 255 ; basecol_green = basecol_blue = 0 ; }
+				if ( pile[row][col].type & PC_REFERENCE ) { basecol_red = basecol_green = 0 ; basecol_blue = 255 ; }
+				if ( pile[row][col].type & PC_SINGLE ) { basecol_red = 0 ; basecol_green = 255 ; basecol_blue = 0 ; }
+				if ( pile[row][col].type & PC_SNP ) { basecol_red = 255 ; basecol_green = basecol_blue = 0 ; }
 				render_char ( pile[row][col].c , x , y ) ;
 			}
 		}
@@ -860,7 +863,7 @@ void Tbam_draw_pileup::merge_all () {
 		for ( int row = 0 ; row < pile.size() ; row++ ) {
 			int y = height - ( row + 1 ) ;
 			for ( int col = 0 ; col < pile[row].size() && col < size ; col++ ) {
-				if ( pile[row][col].type != PC_REFERENCE ) continue ;
+				if ( 0 == ( pile[row][col].type & PC_REFERENCE ) ) continue ;
 
 				if ( use_quality ) {
 					int i ;
@@ -999,7 +1002,7 @@ void Tbam2png::read_bam_file () {
 		fai_destroy ( fai ) ;
 	}
 	
-	if ( width < tmp.end - tmp.beg ) o_arrows = false ;
+	if ( width * 50 < tmp.end - tmp.beg ) o_arrows = false ;
 	
 	draw->set_range () ;
 	total_snps = 0 ;
