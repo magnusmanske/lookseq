@@ -408,18 +408,18 @@ sub move_left
 {
     my (@args) = @_;
     my $opts = $args[-1];
-    $$opts{from} -= 30;
-    $$opts{to}   -= 30;
-    #$$opts{tk_canvas}->move('position_line',-30,0);
+    my $delta = int(($$opts{to} - $$opts{from})/3);
+    $$opts{from} -= $delta;
+    $$opts{to}   -= $delta;
     main_image($opts);
 }
 sub move_right
 {
     my (@args) = @_;
     my $opts = $args[-1];
-    $$opts{from} += 30;
-    $$opts{to}   += 30;
-    #$$opts{tk_canvas}->move('position_line',+30,0);
+    my $delta = int(($$opts{to} - $$opts{from})/3);
+    $$opts{from} += $delta;
+    $$opts{to}   += $delta;
     main_image($opts);
 }
 
