@@ -1,0 +1,5 @@
+Run e.g. as
+    lookseq file.bam -r reference.fa
+
+Questions & comments to Petr Danecek, pd3@sanger
+
