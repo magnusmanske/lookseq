@@ -875,6 +875,11 @@ sub trim_sam_reads
             $iseq += $count;
             $ninserts += $count;
         }
+        elsif ( $type eq 'S' ) 
+        {
+            # Ignore soft clips
+            next;
+        }
         else { die "Could not parse the cigar $seq .. $cigar.\n" }
     }
 
