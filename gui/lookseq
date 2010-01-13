@@ -42,7 +42,7 @@ sub parse_params
         if ( $arg eq '-r' || $arg eq '--reference' ) { $$opts{reference} = shift(@ARGV); next }
         if ( $arg eq '-?' || $arg eq '-h' || $arg eq '--help' ) { error(); }
         if ( -e $arg ) { $$opts{bam} = $arg; next; }
-        error("Unknown parameter \"$arg\". Run -h for help.\n");
+        error("Unknown parameter or non-existent file \"$arg\". Run -h for help.\n");
     }
     $$opts{settings} = "$$opts{config}/settings.pm";
 
@@ -89,12 +89,16 @@ sub symlink_binary
 sub symlink_indexed
 {
     my ($src,$dst,$idx) = @_;
-    if ( -e $dst )
+
+    if ( ! -e $src ) { error("No such file: $src\n"); }
+    if ( ! -e "$src$idx" ) { error("No such file: $src$idx\n"); }
+
+    if ( -e $dst || -l $dst )
     {
         if ( !-l $dst ) { error("Not removing $dst, not a symlink.\n"); return; }
         unlink($dst);
     }
-    if ( -e "$dst$idx" )
+    if ( -e "$dst$idx" || -l "$dst$idx" )
     {
         if ( !-l "$dst$idx" ) { error("Not removing $dst$idx, not a symlink.\n"); return; }
         unlink("$dst$idx");
