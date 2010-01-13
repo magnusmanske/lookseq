@@ -8,6 +8,7 @@ use Tk::widgets qw/JPEG PNG/;
 use Tk::Pane;
 use FindBin;
 use Data::Dumper;
+use File::Spec;
 
 my $opts = parse_params();
 init($opts);
@@ -103,6 +104,8 @@ sub symlink_indexed
         if ( !-l "$dst$idx" ) { error("Not removing $dst$idx, not a symlink.\n"); return; }
         unlink("$dst$idx");
     }
+
+    $src = File::Spec->rel2abs($src);
 
     symlink($src,$dst);
     if ( -e "$src$idx" ) { symlink("$src$idx","$dst$idx"); }
