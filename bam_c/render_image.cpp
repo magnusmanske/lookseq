@@ -1026,6 +1026,7 @@ int Tbam2png::fetch_func(const bam1_t *b, void *data) {
 	} else if ( b->core.isize != 0 ) {
 		b2p->draw->draw_paired_read ( b , data ) ;
 	} else {
+		if ( b2p->o_single ) b2p->draw->draw_single_read ( b , data ) ;
 /*		cout << "DUNNO\t" ;
 		bool read_reverse = b->core.flag & BAM_FMUNMAP ;
 		bool mate_reverse = b->core.flag & BAM_FMREVERSE ;
