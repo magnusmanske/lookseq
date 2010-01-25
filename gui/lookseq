@@ -25,6 +25,7 @@ sub error
     die
         "Usage: lookseq [OPTIONS] <file.bam>\n",
         "Options:\n",
+        "   -a, --all-chroms                Offer all chromosomes to display (otherwise only 1-22,X,Y will be displayed).\n",
         "   -c, --config <dir>              Where to save temporary data (default is \$HOME/.lookseq).\n",
         "   -r, --reference <file.fa>       The reference fasta file.\n",
         "   -h, -?, --help                  This help message.\n",
@@ -36,9 +37,11 @@ sub parse_params
 {
     my $opts = { config=>"$ENV{HOME}/.lookseq" };
     $$opts{last_state} = "$$opts{config}/last_state";
+    $$opts{display_all_chrms} = 0;
 
     while (my $arg=shift(@ARGV))
     {
+        if ( $arg eq '-a' || $arg eq '--all-chroms' ) { $$opts{display_all_chrms} = 1; next }
         if ( $arg eq '-c' || $arg eq '--config' ) { $$opts{config} = shift(@ARGV); next }
         if ( $arg eq '-r' || $arg eq '--reference' ) { $$opts{reference} = shift(@ARGV); next }
         if ( $arg eq '-?' || $arg eq '-h' || $arg eq '--help' ) { error(); }
@@ -255,7 +258,12 @@ sub run
     $mw->Label(-text=>'   Chr:', %label_args)->pack(-side=>'left');
 
     my $chr_list = get_chr_list($opts);
-    $mw->Optionmenu(-options => $chr_list, -command=>[\&set_chromosome,$opts], %optionmenu_args)->pack(-side=>'left');
+    my $chr_menu = $mw->Optionmenu(-options => $chr_list, -command=>[\&set_chromosome,$opts], %optionmenu_args)->pack(-side=>'left');
+
+    # Break the menu into columns - the list of the chromosomes can be very big with the -a option
+    my $menu = $chr_menu->cget(-menu);
+    for my $i (0 .. scalar @$chr_list) { $menu->entryconfigure($i, -columnbreak => 1) unless $i % 30; } 
+
     $mw->Label(-text=>'   Pos from:')->pack(-side=>'left');
     $$opts{tk_position_from} = $mw->Entry(-width=>10, %entry_args, -text=>$$opts{from})->pack(-side=>'left');
     $mw->Label(-text=>'   Zoom:', %label_args)->pack(-side=>'left');
@@ -278,6 +286,11 @@ sub get_chr_list
     my @list;
     for my $chr (@$out)
     {
+        if ( $$opts{display_all_chrms} && $chr=~/^(\S+)/ ) 
+        { 
+            push @list,$1; 
+            next;
+        }
         if ( $chr=~/^(\d+|x|y)\s+/i ) { push @list, $1; }
     }
     return \@list;
