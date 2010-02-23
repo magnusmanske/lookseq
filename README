@@ -33,6 +33,9 @@ TOOLS
 * "mapview2sqlite.pl" can convert MAQ mapview files into sqlite databases.
 
 
+SAMTOOLS (BAM)
+* Use the C++-based renderer for increased speed (bam_c/render_image)
+* Insert header comment into your BAM file for highlighting expected fragment size : "@CO\tHIGHLIGHT 200-300" (for region 200-300)
 
 DATABASE
 

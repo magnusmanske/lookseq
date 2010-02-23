@@ -18,6 +18,7 @@ our @EXPORT = qw(
 	%lscolor $ls_max_lines
 	$bam_ftp $reference_ftp $render_image_command
 	$css_file
+	$paranoia_mode
 );
 
 # Tool title
@@ -98,5 +99,7 @@ our $css_file ;
 
 # Upper SNP display limit for SAM format; set for max number of lines, e.g. 50000
 our $ls_max_lines ;
+
+our $paranoia_mode = 0 ;
 
 1 ;
