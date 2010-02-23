@@ -56,6 +56,15 @@ sub prepare_myscript {
 		opendir(DIR, $datapath) || die "can't opendir $datapath: $!";
 	    my @dbs_bam = grep { /\.bam$/ } readdir(DIR);
 	    closedir DIR;
+
+		if ( 0 == scalar @dbs_bam ) {
+			opendir(DIR, $datapath) || die "can't opendir $datapath: $!";
+			@dbs_bam = grep { /\.bai$/ } readdir(DIR);
+			foreach ( 0 .. $#dbs_bam ) {
+				$dbs_bam[$_] =~ s/\.bai$// ;
+			}
+			closedir DIR;
+		}
 		
 		push @dbs , @dbs_bam ;
 		
@@ -69,6 +78,18 @@ sub prepare_myscript {
 			#$myscript .= "lanes.push ( \"$_\" ) ;\n" ;
 		}
 	}
+	
+	if ( $paranoia_mode ) {
+		my @keep = split "," ,  ( $cgi->param('showSamples') || '' ) ;
+		my $lane = $cgi->param('lane') ;
+		push @keep , $lane if defined $lane ;
+		my %n ;
+		foreach ( @keep ) {
+			$n{$_} = $lanes{$_} if defined $lanes{$_} ;
+		}
+		%lanes = %n ;
+	}
+	
 	foreach ( sort keys %lanes ) {
 #		print $lanes{$_} ;
 		$myscript .= $lanes{$_} ;

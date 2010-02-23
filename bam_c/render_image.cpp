@@ -77,7 +77,7 @@ class Tbam_draw {
 //	virtual postype pos2mem ( postype x , postype y , bool outer_right = false ) { return -1 ; } ;
 	virtual void paint_single_read ( unsigned char *bucket , const bam1_t *b, void *data , int y ) {} ;
 	virtual void set_pixel ( int x , int y ) ;
-	virtual int opt_axis ( postype from , postype to , postype max_steps ) ;
+	virtual int opt_axis ( int from , int to , int max_steps ) ;
 	unsigned char *alloc_p () ;
 	
 	Tbam2png *base ;
@@ -124,6 +124,7 @@ class Tbam_draw_pileup : public Tbam_draw_paired {
 	virtual void set_range () ;
 	virtual int get_neccessary_height () ;
 	virtual void merge_all () ;
+	virtual string get_text_rendering () ;
 	
 	protected:
 	virtual void draw_axis () ;
@@ -161,8 +162,10 @@ class Tbam2png {
 	
 	Tbam_draw *draw ;
 	bool o_single , o_pairs , o_arrows , o_snps , o_faceaway , o_inversions , o_linkpairs , o_colordepth ;
-	bool o_noscale , o_readqual ;
+	bool o_noscale , o_readqual , o_text ;
 	int total_snps , total_reads ;
+	int highlight_from , highlight_to ;
+	bool use_highlight ;
 	
 	private :
 
@@ -209,9 +212,11 @@ int Tbam_draw::get_neccessary_height () {
 }
 
 
-int Tbam_draw::opt_axis ( postype from , postype to , postype max_steps ) {
+int Tbam_draw::opt_axis ( int from , int to , int max_steps ) {
 	int step = 1 ;
+	if ( max_steps <= 0 ) return step ;
 	while ( 1 ) {
+//		printf ( "%d\t%d\t%d\n" , step , max_steps , to - from ) ;
 		if ( ( step * 5 ) * max_steps > to - from ) break ;
 		step *= 5 ;
 		if ( ( step * 2 ) * max_steps > to - from ) break ;
@@ -546,7 +551,7 @@ void Tbam_draw_paired::draw_axis () {
 	postype a ;
 	postype bot = base->get_height() - bottom ;
 	postype rig = base->get_width() - right ;
-	
+
 	if ( left ) {
 		for ( a = top ; a <= bot ; a++ ) {
 			set_pixel ( left-1 , top+a ) ;
@@ -592,6 +597,24 @@ void Tbam_draw_paired::merge_all () {
 			ptr[2] = 255 ;
 			ptr[3] = 255 ;
 		}
+	}
+
+	if ( base->use_highlight ) {
+		postype bot = base->get_height() - bottom ;
+		postype rig = base->get_width() - right ;
+		basecol_red = 0xFF ;
+		basecol_green = 0xF3 ;
+		basecol_blue = 0x80 ;
+		postype y_upper = bot - ( base->highlight_to - vstart + single_offset ) * h / vsize ;
+		postype y_lower = bot - ( base->highlight_from - vstart + single_offset ) * h / vsize ;
+		for ( int x = left+1 ; x < rig ; x++ ) {
+			for ( int y = y_upper ; y <= y_lower ; y++ ) {
+				set_pixel ( x , y ) ;
+			}
+		}
+		basecol_red = 0 ;
+		basecol_green = 0 ;
+		basecol_blue = 0 ;
 	}
 	
 	if ( base->o_linkpairs ) merge_into_png ( pconn , 200 , 200 , 200 ) ;
@@ -648,7 +671,7 @@ int Tbam_draw_coverage::get_neccessary_height () {
 		p1[x] += cov[i] ;
 		p2[x]++ ;
 	}
-	for ( i = 0 ; i < upper ; i++ ) p1[i] /= p2[i] == 0 ? 1 : p2[i] ;
+	for ( i = 0 ; i < upper ; i++ ) p1[i] /= ( p2[i] == 0 ? 1 : p2[i] ) ;
 	for ( i = 0 ; i < upper ; i++ ) {
 		if ( max < p1[i] ) max = p1[i] ;
 	}
@@ -665,6 +688,7 @@ void Tbam_draw_coverage::draw_axis () {
 	postype bot = base->get_height() ;
 	
 	postype step_v = opt_axis ( 0 , bot , bot/20 ) ;
+	if ( step_v <= 1 ) return ;
 	for ( a = 1 ; a * step_v <= bot ; a++ ) {
 		postype y = bot - a * step_v ;
 		for ( postype b = 0 ; b < 5 ; b++ ) set_pixel ( b , y ) ;
@@ -685,7 +709,7 @@ void Tbam_draw_coverage::merge_all () {
 			ptr[3] = 255 ;
 		}
 	}
-	
+
 	int width = base->get_width() ;
 	int height = base->get_height() ;
 	int i ;
@@ -708,7 +732,7 @@ void Tbam_draw_coverage::merge_all () {
 		}
 	}
 	
-	for ( i = 0 ; i < width ; i++ ) p1[i] /= p2[i] == 0 ? 1 : p2[i] ;
+	for ( i = 0 ; i < width ; i++ ) p1[i] /= ( p2[i] == 0 ? 1 : p2[i] ) ;
 	
 	for ( i = 0 ; i < width ; i++ ) {
 		if ( p1[i] == 0 ) continue ;
@@ -722,7 +746,7 @@ void Tbam_draw_coverage::merge_all () {
 			ptr[3] = 255 ;
 		}
 	}
-	
+
 	//if ( !base->o_noscale ) 
 	draw_axis () ;
 }
@@ -804,6 +828,34 @@ void Tbam_draw_pileup::paint_single_read ( unsigned char *bucket , const bam1_t 
 }
 
 void Tbam_draw_pileup::hline ( unsigned char *bucket , postype from , postype to , postype y ) {
+}
+
+string Tbam_draw_pileup::get_text_rendering () {
+	string ret ;
+	
+	char dummy[100] ;
+	sprintf ( dummy , "%d-%d\n" , start , end ) ;
+	ret += dummy ;
+
+	if ( base->refseq ) {
+		for ( int col = 0 ; col < size ; col++ ) {
+			char c = *(base->refseq+col) ;
+			ret += c ;
+		}
+		ret += "\n\n" ;
+	}
+
+	for ( int row = 0 ; row < pile.size() ; row++ ) {
+		for ( int col = 0 ; col < pile[row].size() && col < size ; col++ ) {
+			if ( pile[row][col].type == PC_EMPTY ) {
+				ret += ' ' ;
+			} else {
+				ret += pile[row][col].c ;
+			}
+		}
+		ret += "\n" ;
+	}
+	return ret ;
 }
 
 void Tbam_draw_pileup::merge_all () {
@@ -926,6 +978,7 @@ void Tbam_draw_pileup::merge_all () {
 
 void Tbam2png::init ( string _bam_file , string _region , string _png_file , int _mapq ) 
 {
+	use_highlight = false ;
 	bam_file = _bam_file ;
 	region = _region ;
 	png_file = _png_file ;
@@ -936,7 +989,7 @@ void Tbam2png::init ( string _bam_file , string _region , string _png_file , int
 	width = 1024 ;
 	height = 768 ;
 	o_single = o_pairs = o_arrows = o_snps = o_faceaway = o_inversions = o_linkpairs = o_colordepth = false ;
-	o_noscale = o_readqual = false ;
+	o_noscale = o_readqual = o_text = false ;
 }
 
 void Tbam2png::set_image_size ( postype w , postype h ) {
@@ -967,6 +1020,7 @@ void Tbam2png::set_options ( string options ) {
 		else if ( ov[a] == "colordepth" ) o_colordepth = true ;
 		else if ( ov[a] == "noscale" ) o_noscale = true ;
 		else if ( ov[a] == "readqual" ) o_readqual = true ;
+		else if ( ov[a] == "text" ) o_text = true ;
 	}
 	
 	if ( o_single ) draw->single_offset = 50 ;
@@ -976,9 +1030,31 @@ void Tbam2png::set_options ( string options ) {
 void Tbam2png::read_bam_file () {
 	if ( draw == NULL ) abort_ ( "No drawing class instanced!\n" ) ;
 
+	
 	tmp.beg = 0 ;
 	tmp.end = 0;   
 	tmp.in = samopen(bam_file.c_str(), "rb", 0); 
+	
+//	cout << tmp.in->header->text << endl ;
+	for ( char *c = tmp.in->header->text ; *c ; c++ ) {
+		if ( *c == '\n' && *(c+1) == '@' && *(c+2) == 'C' && *(c+3) == 'O' ) {
+			string s ;
+			use_highlight = false ;
+			for ( char *d = c+5 ; *d > 13 ; d++ ) {
+				if ( *d == ' ' ) {
+					if ( s == "HIGHLIGHT" ) use_highlight = true ;
+					s = "" ;
+				} else s += *d ;
+			}
+			if ( use_highlight ) {
+				highlight_from = atoi ( (char*) s.c_str() ) ;
+				const char *d ;
+				for ( d = s.c_str() ; *(d-1) != '-' ; d++ ) ;
+				highlight_to = atoi ( d ) ;
+			}
+		}
+	}
+	
 	
 	int ref;  
 	bam_index_t *idx;  
@@ -1009,6 +1085,7 @@ void Tbam2png::read_bam_file () {
 	total_reads = 0 ;
 	bam_fetch(tmp.in->x.bam, idx, ref, tmp.beg, tmp.end, NULL, fetch_func);  
 	bam_index_destroy(idx);  
+
 //	cout << "Total SNPs : " << total_snps << endl ;
 }
 
@@ -1081,7 +1158,7 @@ void Tbam2png::create_png () {
 
 void Tbam2png::write_png_file(char* file_name)
 {
-int x, y;
+	int x, y;
 
 	// create file 
 	FILE *fp = fopen(file_name, "wb");
@@ -1282,8 +1359,8 @@ int main(int argc, char **argv) {
 	bam2char[8] = 'T' ;
 	bam2char[15] = 'N' ;
 
-	string bam_file , ref_file , png_file , region , options ;
 	string view = "indel" ;
+	string bam_file , ref_file , png_file , region , options ;
 	int width = 1024 ;
 	int height = 768 ;
 	int vmin = 0 ;
@@ -1361,7 +1438,11 @@ int main(int argc, char **argv) {
 	b2p->create_png () ;
 	dp->merge_all () ;
 
-	b2p->write_png_file((char*)png_file.c_str());
+	if ( b2p->o_text ) {
+		FILE *fp = fopen(png_file.c_str(), "wb");
+		fprintf ( fp , "%s" , (char*) ( (Tbam_draw_pileup*) dp)->get_text_rendering().c_str() ) ;
+		fclose ( fp ) ;
+	} else b2p->write_png_file((char*)png_file.c_str());
 
 	return 0;
 }

@@ -2952,6 +2952,7 @@ sub render_bam_file {
 	push @options , 'noscale' if $display_noscale ;
 	push @options , 'arrows' if $sam_show_read_arrows ;
 	push @options , 'readqual' if $sam_show_read_quality ;
+	push @options , 'text' if $output eq 'text' and $view eq 'pileup' ;
 	#push @options , 'faceaway' if $display_faceaway ;
 	push @options , 'colordepth' ; # FIXME always on
 # my $display_pot_snps = $display =~ m/\|potsnps\|/ ; # FIXME
@@ -2964,15 +2965,25 @@ sub render_bam_file {
 #	print "$cmd\n" ; exit ( 0 ) ;
 	`$cmd` ;
 #	print -s $tmp_fn ;
-	print $cgi->header(-type=>'image/png',-expires=>'-1s');
-	open PNG , $tmp_fn ;
-	binmode STDOUT ;
-	binmode PNG ;
-	my $buff ;
-	while (read(PNG, $buff, 8 * 2**10)) {
-		print STDOUT $buff;
+	
+	if ( $output eq 'text' and $view eq 'pileup' ) {
+		print $cgi->header(-type=>'text/plain',-expires=>'-1s');
+		open FILE , $tmp_fn ;
+		while ( <FILE> ) {
+			print $_ ;
+		}
+		close FILE ;
+	} else {
+		print $cgi->header(-type=>'image/png',-expires=>'-1s');
+		open PNG , $tmp_fn ;
+		binmode STDOUT ;
+		binmode PNG ;
+		my $buff ;
+		while (read(PNG, $buff, 8 * 2**10)) {
+			print STDOUT $buff;
+		}
+		close PNG ;
 	}
-	close PNG ;
 	
 	
 	# Cleanup
