@@ -68,6 +68,7 @@ my $display_pair_links = $display =~ m/\|pairlinks\|/ ;
 my $display_pot_snps = $display =~ m/\|potsnps\|/ ;
 my $display_noscale = $display =~ m/\|noscale\|/ ;
 my $display_uniqueness = $display =~ m/\|uniqueness\|/ ;
+my $display_faceaway = $display =~ m/\|faceaway\|/ ;
 my $display_inline_annotation = 1 ; # FIXME
 
 my $MODE_SINGLE       = 1;
@@ -2953,7 +2954,7 @@ sub render_bam_file {
 	push @options , 'arrows' if $sam_show_read_arrows ;
 	push @options , 'readqual' if $sam_show_read_quality ;
 	push @options , 'text' if $output eq 'text' and $view eq 'pileup' ;
-	#push @options , 'faceaway' if $display_faceaway ;
+	push @options , 'faceaway' if $display_faceaway ;
 	push @options , 'colordepth' ; # FIXME always on
 # my $display_pot_snps = $display =~ m/\|potsnps\|/ ; # FIXME
 	
