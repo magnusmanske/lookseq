@@ -387,12 +387,16 @@ void Tbam_draw_paired::draw_paired_read ( const bam1_t *b, void *data) {
 
 	// Faceaway
 	bool is_faceaway = false ;
+	bool needs_to_become_inversion = false ;
 	if ( isize > 0 && b->core.flag & BAM_FREVERSE ) is_faceaway = true ;
 	else if ( isize < 0 && 0 == ( b->core.flag & BAM_FREVERSE ) ) is_faceaway = true ;
 	if ( is_faceaway ) {
 		if ( base->o_faceaway ) {
 			if ( isize < 0 ) bucket = pfaceaway1 ;
 			else bucket = pfaceaway2 ;
+		} else if ( base->o_inversions ) {
+			is_faceaway = false ;
+			needs_to_become_inversion = true ;
 		} else return ;
 	}
 
@@ -405,6 +409,8 @@ void Tbam_draw_paired::draw_paired_read ( const bam1_t *b, void *data) {
 			if ( isize < 0 ) bucket = pinversions1 ;
 			else bucket = pinversions2 ;
 		} else return ;
+	} else if ( needs_to_become_inversion ) {
+		return ;
 	}
 	
 	if ( !is_inversion && !is_faceaway && !base->o_pairs ) return ; // No drawing normal pairs if unwanted
@@ -617,7 +623,7 @@ void Tbam_draw_paired::merge_all () {
 		basecol_blue = 0 ;
 	}
 	
-	if ( base->o_linkpairs ) merge_into_png ( pconn , 200 , 200 , 200 ) ;
+	if ( base->o_linkpairs ) merge_into_png ( pconn , 220 , 220 , 220 ) ;
 	if ( base->o_single ) merge_into_png ( psingle , 0 , 255 , 0 ) ;
 	if ( base->o_pairs ) {
 		merge_into_png ( plowq , 0xFF , 0x80 , 0x40 ) ;
@@ -628,8 +634,8 @@ void Tbam_draw_paired::merge_all () {
 		merge_into_png ( pfaceaway2 , 128 , 128 , 0 ) ;
 	}
 	if ( base->o_inversions ) {
-		merge_into_png ( pinversions1 , 128 , 128 , 255 ) ;
-		merge_into_png ( pinversions2 , 128 , 255 , 128 ) ;
+		merge_into_png ( pinversions1 , 0x80 , 0x80 , 0 ) ;
+		merge_into_png ( pinversions2 , 0x40 , 0x80 , 0x80 ) ;
 	}
 	if ( base->o_snps ) merge_into_png ( psnps , 255 , 0 , 0 ) ;
 	if ( !base->o_noscale ) draw_axis () ;
