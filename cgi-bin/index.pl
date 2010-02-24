@@ -102,6 +102,10 @@ sub prepare_myscript {
         close($fh);
         $myscript .= join('',@lines);
     }
+
+	my $skin = $cgi->param('skin') || 'lookseq' ;
+	$skin =~ s/[^A-Za-z]//g ;
+	$myscript .= "var skin = \"$skin\" ;\n" ;
 	
 	my $width = $cgi->param('width') || 1024 ;
 	$myscript .= "var img_width = $width ;\n" ;
@@ -181,8 +185,11 @@ sub main {
 
 	&prepare_myscript ;
 	
+	my $skin = $cgi->param('skin') || 'lookseq' ;
+	$skin =~ s/[^A-Za-z]//g ;
+	
 	my @js_files = ( $myscript ,
-					{ -type => 'text/javascript', -src => "$webroot/lookseq.js" }
+					{ -type => 'text/javascript', -src => "$webroot/$skin.js" }
 					) ;
 	unshift @js_files , { -type => 'text/javascript', -src => "$webroot/custom.js" } if -e "$htmlpath/custom.js" ;
 
@@ -200,9 +207,8 @@ sub main {
 	print $x;
 	
 	my $out = '' ;
-    my $layout = $cgi->param('xxx') ? 'test.html' : 'lookseq.html';
-	#open HTML , "$htmlpath/lookseq.html" or die "$htmlpath/lookseq.html: $!";
-	open HTML , "$htmlpath/$layout" or die "$htmlpath/lookseq.html: $!";
+    my $layout = $cgi->param('xxx') ? 'test.html' : "$skin.html";
+	open HTML , "$htmlpath/$layout" or die "$htmlpath/$layout: $!";
 	while ( <HTML> ) {
 		$_ =~ s/__HTMLPATH__/$webroot/g ;
 		$out .= $_ ;

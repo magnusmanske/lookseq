@@ -35,6 +35,7 @@ opt_lp	link pairs
 opt_ks	known SNPs
 opt_ann	annotation
 opt_arr	orientation
+opt_face	face-away
 opt_gc	%GC
 opt_un	non-uniqueness
 opt_qual	read&nbsp;quality
@@ -83,7 +84,8 @@ leg_del_left	Left boundary
 leg_del_mid	Deleted area
 leg_del_right	Right boundary
 
-helper_displays	Also
+chr_pos	Chromosome/position
+helper_displays	Tracks
 cb_coverage	Coverage
 cb_deletions	Deletions
 cb_second_track	Secondary track
