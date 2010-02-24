@@ -368,6 +368,9 @@ function update_reflink ( lanes , display ) {
 		if ( document.getElementById('squeeze_tracks').checked )
 			reflink += '&squeeze_tracks=1' ;
 	}
+	if ( paranoia_mode ) {
+		reflink += "&showSamples=" + show_samples ;
+	}
 	document.getElementById('reflink').href = reflink ;
 }
 
@@ -971,10 +974,22 @@ function on_resize () {
 	change_image_width ( nw ) ;
 }
 
+function three_d_ize ( elm ) {
+	elm.style.borderLeft = '1px solid black' ;
+	elm.style.borderTop = '1px solid black' ;
+	elm.style.borderRight = '1px solid white' ;
+	elm.style.borderBottom = '1px solid white' ;
+}
+
 // Initializes the display settings from URL.
 function initialize_display () {
 	if ( display_init == '' ) return ;
 	window.onresize = on_resize ;
+	document.body.style.backgroundColor = "#999999" ;
+	three_d_ize ( document.getElementById('upper_nav') ) ;
+	three_d_ize ( document.getElementById('lanes_container') ) ;
+//	three_d_ize ( document.getElementById('img_container') ) ;
+	three_d_ize ( document.getElementById('legend_container') ) ;
 	var a = display_init.split ( '|' ) ;
 	var b = new Array () ;
 	for ( var i = 0 ; i < a.length ; i++ ) {

@@ -1,4 +1,4 @@
-<div id='lanes_container' style='background-color:#EEEEEE;position:absolute;width:150px;right:5px;top:100px;bottom:140px'>
+<div id='lanes_container' style='background-color:#EEEEEE;position:absolute;width:150px;right:5px;top:105px;bottom:140px;padding:2px'>
 <!--<div style='float:right;'><a href='#' onclick='togglesidebar()' style='text-decoration: none'>&hArr;</a></div>-->
 <div>
 <div style="font-weight: bold; border-bottom: 1px solid black;">%CHR_POS%</div>
@@ -10,7 +10,7 @@
 </div>
 </div>
 
-<div id='upper_nav' style='align:center;border;background-color:#EEEEEE;position:absolute;right:5px;left:5px;top:5px'>
+<div id='upper_nav' style='align:center;border;background-color:#EEEEEE;position:absolute;right:5px;left:5px;top:5px;padding:2px'>
 <table><tr><td valign='top' style="" nowrap>
 
 <input type='radio' name='display_mode' value='indel' id='display_mode_indel' onclick='display_mode_indel()' checked="checked" /><label for='display_mode_indel'>%INDEL_BUTTON%</label><br/>
@@ -107,7 +107,7 @@ MAPQ_SELECT
 </div>
 
 
-<div id='img_container' style='background:#EEEEEE;overflow:hidden;position:absolute;top:100px;left:5px;right:160px;bottom:140px;overflow-y:scroll'>
+<div id='img_container' style='background:#EEEEEE;overflow:hidden;position:absolute;top:105px;left:5px;right:165px;bottom:140px;overflow-y:scroll'>
 <div id='vruler' style='border-right:1px dotted red;z-index:5;position:absolute;top:2px'></div>
 <img id='main_image' onload='main_image_loaded()' class='dragme' ondblclick='main_image_clicked(event)' onmouseout='hide_vruler()'  onmousemove='mouse_moved_over_main_image(event)' style='position:relative' alt='' src='' />
 <div id='second_image_name' style='margin-top:3px;margin-left:3px;color:#AAAAAA;position:absolute;z-index:9;display:none'></div>
@@ -121,7 +121,7 @@ MAPQ_SELECT
 </div>
 </div>
 
-<div id='legend_container' style='background-color:#EEEEEE; padding:2px;margin-top:2px;position:absolute;height:125px;bottom:5px;left:5px;right:5px'>
+<div id='legend_container' style='background-color:#EEEEEE;padding:2px;margin-top:2px;position:absolute;height:125px;bottom:5px;left:5px;right:5px'>
 <b>%LEGEND_TITLE%</b>
 <div style='display:none' id='legend_indel'>%LEG_INDEL%
 <span style="border-left:3px solid blue; margin-right:5px; padding-left:1px">%LEG_PP%</span>

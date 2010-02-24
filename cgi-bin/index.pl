@@ -80,7 +80,9 @@ sub prepare_myscript {
 	}
 	
 	if ( $paranoia_mode ) {
-		my @keep = split "," ,  ( $cgi->param('showSamples') || '' ) ;
+		my $show_samples = $cgi->param('showSamples') || '' ;
+		$myscript .= "paranoia_mode = true ;\nshow_samples = \"$show_samples\" ;\n" ;
+		my @keep = split "," ,  $show_samples ;
 		my $lane = $cgi->param('lane') ;
 		push @keep , $lane if defined $lane ;
 		my %n ;
@@ -88,6 +90,8 @@ sub prepare_myscript {
 			$n{$_} = $lanes{$_} if defined $lanes{$_} ;
 		}
 		%lanes = %n ;
+	} else {
+		$myscript .= "paranoia_mode = false ;\n" ;
 	}
 	
 	foreach ( sort keys %lanes ) {
