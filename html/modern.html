@@ -1,0 +1,183 @@
+<div id='lanes_container' style='background-color:#EEEEEE;position:absolute;width:150px;right:5px;top:100px;bottom:140px'>
+<!--<div style='float:right;'><a href='#' onclick='togglesidebar()' style='text-decoration: none'>&hArr;</a></div>-->
+<div>
+<div style="font-weight: bold; border-bottom: 1px solid black;">%CHR_POS%</div>
+<div><select name='chr_list' id='chr_list' onchange='chromosome_changed()' size='10' style='width:100%'></select></div>
+<div style='font-size:9pt;text-align:center'><input type='text' id='chr_from' value='1' size='5' /> &ndash; <input type='text' id='chr_to' value='150000' size='5'/></div>
+<div style='text-align:center'><input type='button' name='update_image' value='%UPDATE_IMAGE_BUTTON%' onclick='update_image();' /></div>
+</div>
+<div id='lanes' style='white-space:nowrap'>
+</div>
+</div>
+
+<div id='upper_nav' style='align:center;border;background-color:#EEEEEE;position:absolute;right:5px;left:5px;top:5px'>
+<table><tr><td valign='top' style="" nowrap>
+
+<input type='radio' name='display_mode' value='indel' id='display_mode_indel' onclick='display_mode_indel()' checked="checked" /><label for='display_mode_indel'>%INDEL_BUTTON%</label><br/>
+<input type='radio' name='display_mode' value='pileup' id='display_mode_pileup' onclick='display_mode_pileup()' /><label for='display_mode_pileup'>%PILEUP_BUTTON%</label><br/>
+<input type='radio' name='display_mode' value='paired_pileup' id='display_mode_paired_pileup' onclick='display_mode_paired_pileup()' /><label for='display_mode_paired_pileup'>%PAIRED_PILEUP_BUTTON%</label><br/>
+<input type='radio' name='display_mode' value='coverage' id='display_mode_coverage' onclick='display_mode_coverage()' /><label for='display_mode_coverage'>%COVERAGE_BUTTON%</label><br/>
+
+</td><td valign='top' style='border-left:3px solid #DDDDDD;padding-left:2px' nowrap>
+
+<span style='margin-right:2px'><img src="http://upload.wikimedia.org/wikipedia/commons/7/71/2leftarrow.png"  width="24px" name='button_left'     id='button_left'     title='%BUTTON_LEFT%' onclick='image_left()' /></span>
+<span style='margin-right:2px'><img src="http://upload.wikimedia.org/wikipedia/commons/5/5e/2rightarrow.png" width="24px" name='button_right'    id='button_right'    title='%BUTTON_RIGHT%' onclick='image_right()' /></span>
+<span style='margin-right:2px'><img src="http://upload.wikimedia.org/wikipedia/commons/9/95/Viewmag%2B.png"  width="24px" name='button_zoom_in'  id='button_zoom_in'  title='%BUTTON_ZOOM_IN%'  onclick='zoom_in()' /></span>
+<span style='margin-right:2px'><img src="http://upload.wikimedia.org/wikipedia/commons/a/ac/Viewmag-.png"    width="24px" name='button_zoom_out' id='button_zoom_out' title='%BUTTON_ZOOM_OUT%' onclick='zoom_out()' /></span>
+<span style='margin-right:2px'><img src="http://upload.wikimedia.org/wikipedia/commons/7/78/Viewmag1.png"    width="24px" name='button_zoom_150' id='button_zoom_150' title='%BUTTON_ZOOM_1:1%' onclick='zoom_150()' /></span>
+<span style='margin-right:2px'><img src="__HTMLPATH__/images/2kb_zoom.png"   width="24px" name='button_zoom_1500' id='button_zoom_1500' title='%BUTTON_ZOOM_2kb%' onclick='zoom_1500()' /></span>
+<span style='margin-right:2px'><img src="__HTMLPATH__/images/50kb_zoom.png"  width="24px" name='button_zoom_50k'  id='button_zoom_50k'  title='%BUTTON_ZOOM_50kb%' onclick='zoom_50k()' /></span>
+<span style='margin-right:2px'><img src="http://upload.wikimedia.org/wikipedia/commons/7/7d/Viewmagfit.png"  width="24px" name='button_zoom_chr' id='button_zoom_chr' title='%BUTTON_ZOOM_FULL_CHROMOSOME%' onclick='chromosome_changed()' /></span>
+<br/>
+<span style='margin-right:12px'>
+InDel size
+<select name='indel_zoom' id='indel_zoom' onchange='indel_zoom_changed()' title='Y-axis scale'>
+<option value='auto'>%INDEL_ZOOM_AUTO%</option>
+<option value='300'>300</option>
+<option value='400'>400</option>
+<option value='500'>500</option>
+<option value='1000'>1000</option>
+<option value='1500'>1500</option>
+<option value='2500'>2500</option>
+<option value='5000'>5000</option>
+<option value='10000'>10000</option>
+<option value='15000'>15000</option>
+<option value='50000'>50000</option>
+</select>
+</span>
+<span style='display:none'>
+%IMAGE_WIDTH%
+<select name='image_width' id='image_width' onchange='image_width_changed()'>
+<option value='1280'>1280px</option>
+<option value='1024' selected="selected">1024px</option>
+<option value='800'>800px</option>
+<option value='640'>640px</option>
+</select>
+</span>
+<span style='margin-right:3px'>
+<input id='search_query' name='search_query' type='text' value='' size='10' title='Search annotation' />
+<input type='button' value='%BUTTON_SEARCH%' onclick='on_search()' />
+</span>
+<br/>
+<div id='loading' style='padding:2px;float:right;display:none'>
+<img src="__HTMLPATH__/round_and_round_it_goes.gif" alt="waiting..." />
+<span style="background-color:red;color:white;z-index:100">%UPDATING_STATUS%</span>
+</div>
+<span id='insert_organism_specific_buttons_here'></span>
+<a id='link_to_text' style='display:none' target='_blank'>%TEXT_VERSION_LINK%</a>
+<span style='margin-right:12px' id='mini_data'></span>
+
+
+</td><td valign='top' style='border-left:3px solid #DDDDDD' nowrap>
+<b>%SHOW%</b><br/>
+<input type='checkbox' id='display_perfect' onclick="update_image()" checked="checked" /><label for="display_perfect">%OPT_PPM%</label><br/>
+<input type='checkbox' id='display_snps' onclick="update_image()" checked="checked"/><label for="display_snps">%OPT_PRS%</label><br/>
+<input type='checkbox' id='display_single_reads' onclick="update_image()" /><label for="display_single_reads">%OPT_SR%</label>
+</td><td valign='top' style='' nowrap>
+
+<input type='checkbox' id='display_inversions' onclick="update_image()" checked="checked" /><label for="display_inversions">%OPT_INV%</label><br/>
+<input type='checkbox' id='display_pair_links' onclick="update_image()" checked="checked"/><label for="display_pair_links">%OPT_LP%</label><br/>
+<input type='checkbox' id='display_known_snps' onclick="update_image()" checked="checked"/><label for="display_known_snps">%OPT_KS%</label><br/>
+<input type='checkbox' id='display_uniqueness' onclick="update_image()" checked="checked"/><label for="display_uniqueness">%OPT_UN%</label>
+</td><td valign='top' style='' nowrap>
+
+<input type="checkbox" name='show_arrows' id='show_arrows' onClick='show_arrows_changed()' /><label for="show_arrows">%OPT_ARR%</label><br/>
+<input type="checkbox" name='show_faceaway' id='show_faceaway' onClick='show_faceaway_changed()' /><label for="show_faceaway">%OPT_FACE%</label>
+<span style='display:none'><input type="checkbox" name='show_quality' id='show_quality' onClick='show_quality_changed()' /><label for="show_quality">%OPT_QUAL%</label>
+<input type='checkbox' id='display_inversions_ext' onclick="update_image()" /><label for="display_inversions_ext">%OPT_INV_EXT%</label></span>
+</td><td valign='top' style='border-left:3px solid #DDDDDD' nowrap>
+
+<b>%HELPER_DISPLAYS%</b><br/>
+<input type='checkbox' id='display_annotation' onclick="update_image()" checked="checked"/><label for="display_annotation">%OPT_ANN%</label><br/>
+<input type='checkbox' id='display_gc' onclick="update_image()" /><label for="display_gc">%OPT_GC%</label><br/>
+<input type='checkbox' id='display_coverage' onclick="update_image()" /><label for="display_coverage">%CB_COVERAGE%</label>
+</td><td valign='top' style='' nowrap>
+
+<span style='margin-right:3px;display:none'><input type='checkbox' id='display_deletions' onclick="update_image()" /><label for="display_deletions">%CB_DELETIONS%</label></span>
+<input type='checkbox' id='display_second_track' onclick="toggle_second_track()" /><label for="display_second_track">%CB_SECOND_TRACK%</label><br/>
+<input type='checkbox' id='squeeze_tracks' onclick="toggle_squeeze_tracks()" disabled /><label for="squeeze_tracks">%CB_SQUEEZE_TRACKS%</label><br/>
+<span style='margin-left:10px'>
+%MAPQ%
+<select name='mapq' id='mapq' onclick='mapq_cutoff_changed()'>
+<option value='0'>%MAPQ_ALL%</option>
+MAPQ_SELECT
+</select>
+</span>
+</td></tr></table>
+</div>
+
+
+<div id='img_container' style='background:#EEEEEE;overflow:hidden;position:absolute;top:100px;left:5px;right:160px;bottom:140px;overflow-y:scroll'>
+<div id='vruler' style='border-right:1px dotted red;z-index:5;position:absolute;top:2px'></div>
+<img id='main_image' onload='main_image_loaded()' class='dragme' ondblclick='main_image_clicked(event)' onmouseout='hide_vruler()'  onmousemove='mouse_moved_over_main_image(event)' style='position:relative' alt='' src='' />
+<div id='second_image_name' style='margin-top:3px;margin-left:3px;color:#AAAAAA;position:absolute;z-index:9;display:none'></div>
+<img id='second_image' onload='second_image_loaded()' class='dragme' ondblclick='main_image_clicked(event)' onmouseout='hide_vruler()'  onmousemove='mouse_moved_over_main_image(event)' style='position:relative;border-top:1px solid red;display:none' alt='' src='' />
+<img id='annotation_image' onload='annotation_image_loaded()' class='dragme' onmouseout='hide_vruler()'  onmousemove='mouse_moved_over_main_image(event)' ondblclick='annotation_clicked(event)' style='position:relative;margin-top:2px' alt='' src='' />
+<img id='gc_image' onload='gc_image_loaded()' class='dragme' onmouseout='hide_vruler()'  onmousemove='mouse_moved_over_main_image(event)' ondblclick='main_image_clicked(event)' style='position:relative;margin-top:2px' alt='' src='' />
+<img id='coverage_image' onload='coverage_image_loaded()' class='dragme' onmouseout='hide_vruler()'  onmousemove='mouse_moved_over_main_image(event)' ondblclick='main_image_clicked(event)' style='position:relative;margin-top:2px' alt='' src='' />
+<img id='deletion_image' onload='deletion_image_loaded()' class='dragme' onmouseout='hide_vruler()'  onmousemove='mouse_moved_over_main_image(event)' ondblclick='main_image_clicked(event)' style='position:relative;margin-top:2px' alt='' src='' />
+<div id='hbar' style='display:none;position:relative'>
+<div id='dragbar' style='position:relative;background-color:#FFFFFF;border-left:2px solid #DDDDDD;border-top:2px solid #DDDDDD;border-right:2px solid #444444;border-bottom:2px solid #444444;'></div>
+</div>
+</div>
+
+<div id='legend_container' style='background-color:#EEEEEE; padding:2px;margin-top:2px;position:absolute;height:125px;bottom:5px;left:5px;right:5px'>
+<b>%LEGEND_TITLE%</b>
+<div style='display:none' id='legend_indel'>%LEG_INDEL%
+<span style="border-left:3px solid blue; margin-right:5px; padding-left:1px">%LEG_PP%</span>
+<span style="border-left:3px solid green; margin-right:5px; padding-left:1px">%LEG_PS%</span>
+<span style="border-left:3px solid red; margin-right:5px; padding-left:1px">%LEG_SNPS%</span>
+<span style="border-left:3px solid #D2691E; margin-right:5px; padding-left:1px">%LEG_INV%</span>
+<span style="border-left:3px solid yellow; margin-right:5px; padding-left:1px">%LEG_EFR%</span>
+<span style="margin-left:5px; padding-left:1px">%LEG_CIG%</span>
+<span style="border-left:3px solid cyan; margin-right:5px; padding-left:1px">%LEG_CMR%</span>
+<span style="border-left:3px solid red; margin-right:5px; padding-left:1px">%LEG_DEL%</span>
+<span style="border-left:3px solid green; margin-right:5px; padding-left:1px">%LEG_INS%</span>
+</div>
+<div style='display:none' id='legend_inv'>%LEG_INV_EXT%
+<span style="border-left:3px solid brown; margin-right:5px; padding-left:1px">%LEG_INV_LS%</span>
+<span style="border-left:3px solid green; margin-right:25px; padding-left:1px">%LEG_INV_RS%</span>
+<span style="border-left:3px solid #B6BA18; margin-right:5px; padding-left:1px">%LEG_INV_LB%</span>
+<span style="border-left:3px solid #7CEB98; margin-right:5px; padding-left:1px">%LEG_INV_RB%</span>
+<span style="border-left:3px solid #99D258; margin-right:5px; padding-left:1px">%LEG_INV_MID%</span>
+</div>
+<div style='display:none' id='legend_pileup'>%LEG_PUV% 
+<span style="border-left:3px solid blue; margin-right:5px; padding-left:1px">%LEG_PP%</span>
+<span style="border-left:3px solid green; margin-right:5px; padding-left:1px">%LEG_PS%</span>
+<span style="border-left:3px solid red; margin-right:5px; padding-left:1px">%LEG_SNPS%</span>
+<span style="border-left:3px solid magenta; margin-right:5px; padding-left:1px">%LEG_INV%</span>
+<span style="border-left:3px solid gray; margin-right:5px; padding-left:1px">%LEG_OOR%</span>
+</div>
+<div style='display:none' id='legend_coverage'>%LEG_COV% 
+<span style="border-left:3px solid blue; margin-right:5px; padding-left:1px">%LEG_TOT%</span>
+</div>
+<div style='display:none' id='legend_known_snps'>%LEG_KS% 
+<span style="border-left:3px solid gray; margin-right:5px; padding-left:1px">%LEG_IPA% (R=AG; Y=CT; M=AC; K=GT; W=AT; S=CG; B=CGT; D=AGT; H=ACT; V=ACG; N=ACGT)</span>
+</div>
+<div style='display:none' id='legend_annotation'>%LEG_ANN% 
+<span style="border-left:3px solid blue; margin-right:5px; padding-left:1px">%LEG_CDS%</span>
+<span style="border-left:3px solid red; margin-right:5px; padding-left:1px">%LEG_REPEAT%</span>
+<span style="border-left:3px solid green; margin-right:5px; padding-left:1px">%LEG_CENTROMER%</span>
+<span style="border-left:3px solid gray; margin-right:5px; padding-left:1px">%LEG_OTHER%</span>
+<span style="border-left:3px solid white; margin-right:5px; padding-left:1px">%LEG_STRAND%</span>
+</div>
+<div style='display:none' id='legend_gc'>%LEG_GC_TITLE% 
+<span style="border-left:3px solid blue; margin-right:5px; padding-left:1px">%LEG_GC%</span>
+<span style="border-left:3px solid red; margin-right:5px; padding-left:1px">%LEG_50%</span>
+[&plusmn;%LEG_WR%]
+</div>
+<div style='display:none' id='legend_coverage_two_samples'>%LEG_COV2% 
+<span style="border-left:3px solid #44B4D5; margin-right:5px; padding-left:1px">%LEG_COV2_TOP%</span>
+<span style="border-left:3px solid #72FE95; margin-right:5px; padding-left:1px">%LEG_COV2_BOT%</span>
+<span style="border-left:3px solid #EDEF85; margin-right:5px; padding-left:1px">%LEG_COV2_BOTH%</span>
+</div>
+<div style='display:none' id='legend_deletions'>%LEG_DEL% 
+<span style="border-left:3px solid #44B4D5; margin-right:5px; padding-left:1px">%LEG_DEL_LEFT%</span>
+<span style="border-left:3px solid #72FE95; margin-right:5px; padding-left:1px">%LEG_DEL_MID%</span>
+<span style="border-left:3px solid #EDEF85; margin-right:5px; padding-left:1px">%LEG_DEL_RIGHT%</span>
+</div>
+<div style='font-size:8pt'>%REFLINK%
+<div id='ie_warning' style='display:none;font-size:7pt;font-style:italic;'></div>
+</div>
+<div id='debug'></div>
+</div>
