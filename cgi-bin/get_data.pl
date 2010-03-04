@@ -876,6 +876,11 @@ sub trim_sam_reads
             $iseq += $count;
             $ninserts += $count;
         }
+        elsif ( $type eq 'H' ) 
+        {
+            # Ignore hard clips
+            next;
+        }
         elsif ( $type eq 'S' ) 
         {
             # Ignore soft clips
