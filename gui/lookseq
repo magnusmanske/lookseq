@@ -25,9 +25,10 @@ sub error
     die
         "Usage: lookseq [OPTIONS] <file.bam>\n",
         "Options:\n",
-        "   -a, --all-chroms                Offer all chromosomes to display (otherwise only 1-22,X,Y will be displayed).\n",
         "   -c, --config <dir>              Where to save temporary data (default is \$HOME/.lookseq).\n",
+        "   -C, --chromosomes <regex>       The default is '[0-9XY]+' (1-22,X,Y), change to '.*' to match everything.\n",
         "   -r, --reference <file.fa>       The reference fasta file.\n",
+        "   -v, --verbose                   Print lookseq commands executed.\n",
         "   -h, -?, --help                  This help message.\n",
         "\n";
 }
@@ -35,15 +36,17 @@ sub error
 
 sub parse_params
 {
-    my $opts = { config=>"$ENV{HOME}/.lookseq" };
+    my $opts = { config=>"$ENV{HOME}/.lookseq", verbose=>0 };
     $$opts{last_state} = "$$opts{config}/last_state";
     $$opts{display_all_chrms} = 0;
+    $$opts{chrms} = '[0-9XY]+';
 
     while (my $arg=shift(@ARGV))
     {
-        if ( $arg eq '-a' || $arg eq '--all-chroms' ) { $$opts{display_all_chrms} = 1; next }
+        if ( $arg eq '-C' || $arg eq '--chromosomes' ) { $$opts{chrms} = shift(@ARGV); next }
         if ( $arg eq '-c' || $arg eq '--config' ) { $$opts{config} = shift(@ARGV); next }
         if ( $arg eq '-r' || $arg eq '--reference' ) { $$opts{reference} = shift(@ARGV); next }
+        if ( $arg eq '-v' || $arg eq '--verbose' ) { $$opts{verbose} = 1; next }
         if ( $arg eq '-?' || $arg eq '-h' || $arg eq '--help' ) { error(); }
         if ( -e $arg ) { $$opts{bam} = $arg; next; }
         error("Unknown parameter or non-existent file \"$arg\". Run -h for help.\n");
@@ -67,8 +70,9 @@ sub parse_params
 
 sub CMD
 {
-    my ($cmd) = @_;
-    print STDERR "$cmd\n";
+    my ($cmd,$opts) = @_;
+    if ( !$opts ) { $opts={}; }
+    print STDERR "$cmd\n" unless !$$opts{verbose};
     my (@out) = `$cmd`;
     if ( $? )
     {
@@ -280,18 +284,17 @@ sub run
 sub get_chr_list
 {
     my ($opts) = @_;
-    my $out = CMD("$$opts{chrom_stats}");
+    my $out = CMD($$opts{chrom_stats},$opts);
     if ( !$out ) { return; }
     strip_http_header($out);
     my @list;
     for my $chr (@$out)
     {
-        if ( $$opts{display_all_chrms} && $chr=~/^(\S+)/ ) 
-        { 
-            push @list,$1; 
-            next;
-        }
-        if ( $chr=~/^(\d+|x|y)\s+/i ) { push @list, $1; }
+        if ( $chr=~/^($$opts{chrms})\s+/i ) { push @list, $1; }
+    }
+    if ( !scalar @list ) 
+    { 
+        error("No chromosomes matched '$$opts{chrms}', try different regex with the -C option.\n"); 
     }
     return \@list;
 }
@@ -336,7 +339,7 @@ sub main_image
 
     my $view = $$opts{view_mode} eq 'pileup' ? 'paired_pileup' : 'indel';
     my $args = qq[output=image width=$$opts{width} view=$view maxdist=$$opts{insert_size} display='|perfect|single|inversions|pairlinks|potsnps|uniqueness|gc|coverage|' debug=0 lane=file.bam];
-    my $out = CMD("$$opts{get_data} $args from=$from to=$to chr=$chr");
+    my $out = CMD("$$opts{get_data} $args from=$from to=$to chr=$chr",$opts);
     if ( !$out ) { return; }
 
     strip_http_header($out);
@@ -378,7 +381,7 @@ sub depth_image
     my $to   = $$opts{to};
 
     my $args = qq[output=image width=$$opts{width} view=coverage maxdist=$$opts{insert_size} display='|perfect|single|inversions|pairlinks|potsnps|uniqueness|gc|coverage|' debug=0 lane=file.bam];
-    my $out = CMD("$$opts{get_data} $args from=$from to=$to chr=$chr");
+    my $out = CMD("$$opts{get_data} $args from=$from to=$to chr=$chr",$opts);
     if ( !$out ) { return; }
 
     strip_http_header($out);
