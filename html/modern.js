@@ -285,7 +285,13 @@ function show_lanes () {
 	var lanelist = document.createElement ( 'div' ) ;
 	lanelist.id = "lanelist" ;
 	lanelist.style.fontSize = "8pt" ;
-	lanelist.style.maxHeight = "620px" ;
+	
+	var lch = parseInt ( document.getElementById('img_container').offsetHeight ) ;
+	lch -= parseInt ( document.getElementById('chr_lanes_container').offsetHeight  ) ;
+	lch -= 74 ; // Damn, this is an ugly hack...
+	
+	lanelist.style.height = lch + "px" ;
+	lanelist.style.maxHeight = lch + "px" ;
 	lanelist.style.overflowY = 'scroll' ;
 	lanelist.style.width = '100%' ;
 	
