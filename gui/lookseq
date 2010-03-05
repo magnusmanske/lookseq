@@ -220,7 +220,7 @@ sub update_to_range
     my ($opts) = @_;
 
     my $to = $$opts{from}+int($$opts{width}/7);
-    if ( $$opts{view_mode} ne 'pileup' && $$opts{zoom}=~/^(\d+)([kM]?)b?$/ ) 
+    if ( $$opts{zoom}=~/^(\d+)([kM]?)b?$/ ) 
     {
         if ( $2 )
         {
@@ -262,7 +262,7 @@ sub run
     $mw->Label(-text=>'   Chr:', %label_args)->pack(-side=>'left');
 
     my $chr_list = get_chr_list($opts);
-    my $chr_menu = $mw->Optionmenu(-options => $chr_list, -command=>[\&set_chromosome,$opts], %optionmenu_args)->pack(-side=>'left');
+    my $chr_menu = $mw->Optionmenu(-options => $chr_list, -command=>[\&set_chromosome,$opts], %optionmenu_args, -textvariable=>\$$opts{chr})->pack(-side=>'left');
 
     # Break the menu into columns - the list of the chromosomes can be very big with the -a option
     my $menu = $chr_menu->cget(-menu);
@@ -278,6 +278,7 @@ sub run
     $mw->Button(-text=>'Refresh' ,-command=>[\&refresh,$opts], %button_args)->pack(-side=>'right');
     $mw->Label(-textvariable=>\$$opts{tk_position})->pack(-side=>'right');
 
+    $mw->bind('<Configure>' => [\&configure,$opts]);
     MainLoop;
 }
 
@@ -365,7 +366,8 @@ sub main_image
         $$opts{tk_canvas}->CanvasBind('<Motion>' => [\&set_position, $opts]);
         $$opts{tk_canvas}->CanvasBind('<Double-Button-1>' => [\&move_to_position, $opts]);
 
-        $$opts{width} = $w;
+        $$opts{width}  = $w;
+        $$opts{height} = $h;
     }
 
     update_position_entry($opts);
@@ -400,7 +402,7 @@ sub depth_image
     {
         $$opts{tk_depth}  = $$opts{tk_window}->Photo('depth',-file=>"$$opts{config}/depth.png",-format=>'PNG');
         my $w = $$opts{width};
-        my $h = $$opts{tk_photo}->height + 80;
+        my $h = $$opts{height};
         $$opts{tk_canvas}->createImage(0,$$opts{tk_photo}->height+80,-image=>'depth',-anchor=>'sw');
         $$opts{tk_canvas}->createLine($w/2,0,$w/2,$h,-fill=>'red',-tag=>'position_line',-dash=>[2,2]);
     }
@@ -412,8 +414,21 @@ sub depth_image
 
 sub configure
 {
-    my ($opts) = @_;
-    print STDERR "configure\n";
+    my (@args) = @_;
+
+    #print STDERR "$args[0]\n";
+    if ( $args[0] eq $$opts{tk_canvas} )
+    {
+        if ( !exists($$opts{width_diff}) ) { $$opts{width_diff} = $$opts{tk_canvas}->width-$$opts{width}; }
+
+        my $xe = $$opts{tk_canvas}->XEvent;
+        if ( abs($xe->w - $$opts{width} -  $$opts{width_diff}) > 10 )
+        {
+            $$opts{width} = $xe->w - $$opts{width_diff};
+            #printf STDERR "%d %d\n", $$opts{width},$$opts{width_diff};
+            refresh($opts);
+        }
+    }
 }
 
 sub view_mode
