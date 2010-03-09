@@ -30,6 +30,8 @@ using namespace std ;
 #define PC_REFERENCE 1
 #define PC_SNP 2
 #define PC_SINGLE 4
+#define PC_INSERTION 8
+#define PC_DELETION 16
 
 typedef long postype ;
 
@@ -76,6 +78,7 @@ class Tbam_draw {
 	virtual void draw_axis () {} ;
 //	virtual postype pos2mem ( postype x , postype y , bool outer_right = false ) { return -1 ; } ;
 	virtual void paint_single_read ( unsigned char *bucket , const bam1_t *b, void *data , int y ) {} ;
+	virtual void paint_single_read_cigar ( unsigned char *bucket , const bam1_t *b, void *data , int y ) {} ;
 	virtual void set_pixel ( int x , int y ) ;
 	virtual int opt_axis ( int from , int to , int max_steps ) ;
 	unsigned char *alloc_p () ;
@@ -98,10 +101,11 @@ class Tbam_draw_paired : public Tbam_draw {
 	protected :
 	virtual void draw_axis () ;
 	virtual void paint_single_read ( unsigned char *bucket , const bam1_t *b, void *data , int y ) ;
-	virtual void hline ( unsigned char *bucket , postype from , postype to , postype y ) ;
+	virtual void paint_single_read_cigar ( unsigned char *bucket , const bam1_t *b, void *data , int y ) ;
+	virtual void hline ( unsigned char *bucket , postype from , postype to , postype y , bool count_in_coverage = true ) ;
 	virtual void paint_arrow ( unsigned char *bucket , postype from , postype to , postype y , bool reverse ) ;
 	inline postype pos2mem ( postype x , postype y , bool outer_right = false ) ;
-	unsigned char *psingle , *ppaired , *psnps , *pconn , *pfaceaway1 , *pfaceaway2 , *pinversions1 , *pinversions2 , *plowq ;
+	unsigned char *psingle , *ppaired , *psnps , *pconn , *pfaceaway1 , *pfaceaway2 , *pinversions1 , *pinversions2 , *plowq , *p_cigar_insertion , *p_cigar_deletion ;
 } ;
 
 class Tbam_draw_coverage : public Tbam_draw_paired {
@@ -113,7 +117,7 @@ class Tbam_draw_coverage : public Tbam_draw_paired {
 	
 	protected:
 	virtual void draw_axis () ;
-	virtual void hline ( unsigned char *bucket , postype from , postype to , postype y ) ;
+	virtual void hline ( unsigned char *bucket , postype from , postype to , postype y , bool count_in_coverage = true ) ;
 	
 	int *cov ;
 } ;
@@ -128,9 +132,9 @@ class Tbam_draw_pileup : public Tbam_draw_paired {
 	
 	protected:
 	virtual void draw_axis () ;
-	virtual void hline ( unsigned char *bucket , postype from , postype to , postype y ) ;
+	virtual void hline ( unsigned char *bucket , postype from , postype to , postype y , bool count_in_coverage = true ) ;
 	virtual void paint_single_read ( unsigned char *bucket , const bam1_t *b, void *data , int y ) ;
-	void get_pileup_read_start ( const bam1_t *b , int &row , int &pos ) ;
+	void get_pileup_read_start ( const bam1_t *b , int &row , int &pos , bool has_insertion = false ) ;
 	
 	vector <VPC> pile ;
 	bool render_as_text ;
@@ -240,8 +244,8 @@ void Tbam_draw::fill_rect ( int x1 , int y1 , int x2 , int y2 , int r , int g , 
 	int b2 = basecol_blue ;
 	
 	basecol_red = r ;
-	basecol_green = r ;
-	basecol_blue = r ;
+	basecol_green = g ;
+	basecol_blue = b ;
 	
 	for ( int x = x1 ; x <= x2 ; x++ ) {
 		for ( int y = y1 ; y <= y2 ; y++ ) {
@@ -370,6 +374,8 @@ Tbam_draw_paired::Tbam_draw_paired ( Tbam2png *_base ) : Tbam_draw ( _base ) {
 	ppaired = alloc_p () ;
 	plowq = alloc_p () ;
 	psnps = alloc_p () ;
+	p_cigar_insertion = alloc_p () ;
+	p_cigar_deletion = alloc_p () ;
 	pconn = alloc_p () ;
 	pfaceaway1 = alloc_p () ;
 	pfaceaway2 = alloc_p () ;
@@ -425,35 +431,28 @@ void Tbam_draw_paired::draw_paired_read ( const bam1_t *b, void *data) {
 	// Paint linkage
 	if ( isize > 0 ) {
 		postype x = b->core.pos ;
-		hline ( pconn , x , x + isize , abs(isize) ) ;
+		hline ( pconn , x , x + isize , abs(isize) , false ) ;
 	} else {
 		postype x = b->core.pos + b->core.l_qseq - 1 ;
-		hline ( pconn , x + isize , x , abs(isize) ) ;
+		hline ( pconn , x + isize , x , abs(isize) , false ) ;
 	}
 }
 
 void Tbam_draw_paired::paint_single_read ( unsigned char *bucket , const bam1_t *b, void *data , int y ) {
-	postype from , to ;
-	// TODO use bam_cigar2qlen, maybe
-	if ( b->core.n_cigar == 1 ) {
-		from = b->core.pos ;
-		to = from + b->core.l_qseq - 1 ;
-	} else { // FIXME cigar
-		from = b->core.pos ;
-		to = from + b->core.l_qseq - 1 ;
+	if ( y < vstart || y >= vend ) return ;
+
+	if ( b->core.n_cigar > 1 ) {
+		paint_single_read_cigar ( bucket , b , data , y ) ;
+		return ;
 	}
 	
-	if ( y < vstart || y >= vend ) return ;
+	postype from = b->core.pos ;
+	postype to = from + b->core.l_qseq - 1 ;
+	
 
 	hline ( bucket , from , to , y ) ;
 	
 	// SNPs
-//	int has_indels = 0 ; //bam_aux2i ( bam_aux_get ( b , "H1" ) ) +  bam_aux2i ( bam_aux_get ( b , "H2" ) ) ;
-//	int has_snps = bam_aux2i ( bam_aux_get ( b , "NM" ) ) + has_indels ;
-//	cout << bam_aux2i ( bam_aux_get ( b , "MD" ) ) << "!" << endl ;
-//	bool has_snps = bam_aux2i ( bam_aux_get ( b , "MD" ) ) != 0 ;
-//	bool has_snps = true ;
-//	int has_snps = b->core.l_qseq - bam_aux2i ( bam_aux_get ( b , "H0" ) ) ;
 	if ( base->o_snps && base->refseq ) {
 		uint8_t *s = bam1_seq ( b ) ;
 		postype p = b->core.pos + 1 ;
@@ -462,10 +461,7 @@ void Tbam_draw_paired::paint_single_read ( unsigned char *bucket , const bam1_t 
 			if ( p >= end ) break ;
 
 			if ( *(base->refseq+p-start) != bam2char[bam1_seqi(s,a)] ) {
-//				char c = *(base->refseq+p-start) ;
-//				cout << p << "\t" << c << "\t" << (int) *(bam1_qual(b)+a) << endl ;
-//				base->total_snps++ ;
-				hline ( psnps , p , p , y ) ;
+				hline ( psnps , p , p , y , false ) ;
 			}
 		}
 	}
@@ -475,6 +471,59 @@ void Tbam_draw_paired::paint_single_read ( unsigned char *bucket , const bam1_t 
 		paint_arrow ( bucket , from , to , y , b->core.flag & BAM_FREVERSE ) ;
 	}
 }
+
+void Tbam_draw_paired::paint_single_read_cigar ( unsigned char *bucket , const bam1_t *b, void *data , int y ) {
+	uint32_t *cigdata = bam1_cigar(b) ;
+	postype p = b->core.pos ;
+	int rp = 0 ;
+	uint8_t *s = bam1_seq ( b ) ;
+	
+	for ( int cigcnt = 0 ; cigcnt < b->core.n_cigar ; cigcnt++ ) {
+		uint32_t ciglen = cigdata[cigcnt] >> 4 ;
+		uint32_t cigtype = cigdata[cigcnt] & 15 ;
+		
+		if ( cigtype == BAM_CMATCH ) { // OK
+			for ( int b = 0 ; b < ciglen ; b++ , p++ , rp++ ) {
+				if ( *(base->refseq+p-start+1) != bam2char[bam1_seqi(s,rp)] ) {
+					hline ( psnps , p , p , y ) ;
+				} else {
+					hline ( bucket , p , p , y ) ;
+				}
+			}
+		} else if ( cigtype == BAM_CINS ) { // OK
+			for ( int b = 0 ; b < ciglen ; b++ ) {
+				int yo = b > ciglen/2 ? ciglen - b : b ;
+				int xo = b - ciglen/2 ;
+				yo = ciglen/2 - yo ;
+				hline ( p_cigar_insertion , p + xo  , p + xo + 1 , y+yo*2 , false ) ;
+				hline ( p_cigar_insertion , p + xo  , p + xo + 1 , y+yo*2-1 , false ) ;
+			}
+			rp += ciglen ;
+		} else if ( cigtype == BAM_CDEL ) { // OK
+			for ( int b = 0 ; b < ciglen ; b++ , p++ ) {
+				int yo = b > ciglen/2 ? ciglen - b : b ;
+				hline ( p_cigar_deletion , p , p+1 , y-yo*2 , false ) ;
+				hline ( p_cigar_deletion , p , p+1 , y-yo*2+1 , false ) ;
+			}
+		} else if ( cigtype == BAM_CREF_SKIP ) { // UNTESTED
+			rp += ciglen ;
+//			p += ciglen ;
+		} else if ( cigtype == BAM_CSOFT_CLIP ) { // UNTESTED
+			rp += ciglen ;
+		} else if ( cigtype == BAM_CHARD_CLIP ) { // UNTESTED
+			p += ciglen ;
+		} else if ( cigtype == BAM_CPAD ) { // UNTESTED
+			p += ciglen ;
+		}
+		
+	}
+	
+	// Arrows
+	if ( base->o_arrows ) {
+		paint_arrow ( bucket , b->core.pos , p , y , b->core.flag & BAM_FREVERSE ) ;
+	}
+}
+
 
 void Tbam_draw_paired::paint_arrow ( unsigned char *bucket , postype from , postype to , postype y , bool reverse ) {
 	if ( reverse ) {
@@ -501,7 +550,7 @@ void Tbam_draw_paired::paint_arrow ( unsigned char *bucket , postype from , post
 	}
 }
 
-void Tbam_draw_paired::hline ( unsigned char *bucket , postype from , postype to , postype y ) {
+void Tbam_draw_paired::hline ( unsigned char *bucket , postype from , postype to , postype y , bool count_in_coverage ) {
 	if ( y < vstart || y >= vend ) return ;
 	
 	if ( from < start ) from = start ;
@@ -637,7 +686,12 @@ void Tbam_draw_paired::merge_all () {
 		merge_into_png ( pinversions1 , 0x80 , 0x80 , 0 ) ;
 		merge_into_png ( pinversions2 , 0x40 , 0x80 , 0x80 ) ;
 	}
-	if ( base->o_snps ) merge_into_png ( psnps , 255 , 0 , 0 ) ;
+	
+	if ( base->o_snps ) {
+		merge_into_png ( p_cigar_insertion , 0 , 200 , 0 ) ;
+		merge_into_png ( p_cigar_deletion  , 200 , 0 , 0 ) ;
+		merge_into_png ( psnps , 255 , 0 , 0 ) ;
+	}
 	if ( !base->o_noscale ) draw_axis () ;
 //	render_number ( base->total_reads , 200 , 50 ) ;
 }
@@ -656,7 +710,8 @@ void Tbam_draw_coverage::set_range () {
 	for ( int i = 0 ; i < size ; i++ ) cov[i] = 0 ;
 }
 
-void Tbam_draw_coverage::hline ( unsigned char *bucket , postype from , postype to , postype y ) {
+void Tbam_draw_coverage::hline ( unsigned char *bucket , postype from , postype to , postype y , bool count_in_coverage ) {
+	if ( !count_in_coverage ) return ;
 	if ( from < start ) from = start ;
 	if ( to >= end ) to = end - 1 ;
 	for ( int i = from ; i <= to ; i++ ) cov[i-start]++ ;
@@ -776,7 +831,7 @@ int Tbam_draw_pileup::get_neccessary_height () {
 void Tbam_draw_pileup::draw_axis () {
 }
 
-void Tbam_draw_pileup::get_pileup_read_start ( const bam1_t *b , int &row , int &pos ) {
+void Tbam_draw_pileup::get_pileup_read_start ( const bam1_t *b , int &row , int &pos , bool has_insertion ) {
 	pos = b->core.pos + 1 - start ;
 	for ( row = 0 ; row < pile.size() ; row++ ) {
 		bool occupied = false ;
@@ -785,6 +840,7 @@ void Tbam_draw_pileup::get_pileup_read_start ( const bam1_t *b , int &row , int 
 			if ( p < start ) continue ;
 			if ( p >= end ) break ;
 			if ( pile[row][pos+a].type == PC_EMPTY ) continue ;
+			if ( has_insertion && ( pile.size() < row && pile[row+1][pos+a].type == PC_EMPTY ) ) continue ;
 			occupied = true ;
 			break ;
 		}
@@ -794,46 +850,95 @@ void Tbam_draw_pileup::get_pileup_read_start ( const bam1_t *b , int &row , int 
 	
 	row = pile.size() ;
 	pile.push_back ( VPC ( size , Tpileupchar() ) ) ;
-//	for ( int i = start ; i < end ; i++ ) pile[row].push_back ( Tpileupchar () ) ;
+//	if ( has_insertion ) pile.push_back ( VPC ( size , Tpileupchar() ) ) ;
 }
 
 void Tbam_draw_pileup::paint_single_read ( unsigned char *bucket , const bam1_t *b, void *data , int y ) {
 	postype from , to ;
+	bool has_insertion = false ;
+	uint32_t *cigdata = bam1_cigar(b) ;
+
 	// TODO use bam_cigar2qlen, maybe
 	if ( b->core.n_cigar == 1 ) {
 		from = b->core.pos ;
 		to = from + b->core.l_qseq - 1 ;
-	} else { // FIXME cigar
+	} else { // cigar
 		from = b->core.pos ;
 		to = from + b->core.l_qseq - 1 ;
+		
+		for ( int cigcnt = 0 ; cigcnt < b->core.n_cigar ; cigcnt++ ) {
+			if ( BAM_CINS == cigdata[cigcnt] & 15 ) has_insertion = true ;
+		}
 	}
 	
 	if ( y < vstart || y >= vend ) return ;
 	
 	int pile_row , pile_pos ;
-	get_pileup_read_start ( b , pile_row , pile_pos ) ;
+	get_pileup_read_start ( b , pile_row , pile_pos , has_insertion ) ;
 
 	uint8_t *s = bam1_seq ( b ) ;
 	postype p = b->core.pos + 1 ;
 	char *q = (char*) bam1_qual(b) ;
-	for ( postype a = 0 ; a < b->core.l_qseq ; a++ , p++ , pile_pos++ , q++ ) {
-		if ( p < start ) continue ;
-		if ( p >= end ) break ;
+	
+	uint32_t rp = 0 ;
+	for ( int cigcnt = 0 ; cigcnt < b->core.n_cigar ; cigcnt++ ) {
+		uint32_t ciglen = cigdata[cigcnt] >> 4 ;
+		uint32_t cigtype = cigdata[cigcnt] & 15 ;
 
-		char base_read = bam2char[bam1_seqi(s,a)] ;
-		char base_ref = base->refseq ? *(base->refseq+p-start) : base_read ;
-		pile[pile_row][pile_pos].c = base_read ;
-		pile[pile_row][pile_pos].quality = *q ;
-		if ( base_read == base_ref ) {
-			pile[pile_row][pile_pos].type = PC_REFERENCE ;
-		} else {
-			pile[pile_row][pile_pos].type = PC_SNP ;
+		if ( cigtype == BAM_CMATCH ) {
+			for ( postype a = 0 ; a < ciglen ; a++ , p++ , pile_pos++ , q++ ) {
+				if ( p < start ) continue ;
+				if ( p >= end ) return ;
+
+				char base_read = bam2char[bam1_seqi(s,a+rp)] ;
+				char base_ref = base->refseq ? *(base->refseq+p-start) : base_read ;
+				pile[pile_row][pile_pos].c = base_read ;
+				pile[pile_row][pile_pos].quality = *q ;
+				if ( base_read == base_ref ) {
+					pile[pile_row][pile_pos].type |= PC_REFERENCE ;
+				} else {
+					pile[pile_row][pile_pos].type |= PC_SNP ;
+				}
+				if ( b->core.flag & BAM_FMUNMAP ) pile[pile_row][pile_pos].type |= PC_SINGLE ;
+			}
+			rp += ciglen ;
+		} else if ( cigtype == BAM_CINS ) {
+			for ( int b = 0 ; b < ciglen ; b++ ) {
+				while ( pile.size() <= pile_row+1 ) pile.push_back ( VPC ( size , Tpileupchar() ) ) ;
+				char base_read = bam2char[bam1_seqi(s,b+rp)] ;
+				if ( pile_pos+b > 0 && pile_pos+b < pile[pile_row+1].size() ) {
+					pile[pile_row+1][pile_pos+b].type |= PC_SNP ;
+					pile[pile_row+1][pile_pos+b].type |= PC_INSERTION ;
+					pile[pile_row+1][pile_pos+b].c = base_read ;
+				}
+			}
+			rp += ciglen ;
+		} else if ( cigtype == BAM_CDEL ) { // OK
+			for ( int b = 0 ; b < ciglen ; b++ , p++ , pile_pos++ ) {
+				if ( p < start ) continue ;
+				if ( p >= end ) return ;
+				pile[pile_row][pile_pos].type = PC_DELETION ;
+				pile[pile_row][pile_pos].c = '-' ;
+			}
+		} else if ( cigtype == BAM_CREF_SKIP ) { // UNTESTED
+			rp += ciglen ;
+			p += ciglen ;
+		} else if ( cigtype == BAM_CSOFT_CLIP ) { // OK
+			rp += ciglen ;
+		} else if ( cigtype == BAM_CHARD_CLIP ) { // UNTESTED
+/*			rp += ciglen ;
+			pile_pos += ciglen ;
+			p += ciglen ;*/
+		} else if ( cigtype == BAM_CPAD ) { // UNTESTED
+			pile_pos += ciglen ;
+			p += ciglen ;
 		}
-		if ( b->core.flag & BAM_FMUNMAP ) pile[pile_row][pile_pos].type |= PC_SINGLE ;
+		if ( rp >= b->core.l_qseq ) return ;
+//		if ( cigtype != BAM_CMATCH ) pile[pile_row][pile_pos].c = cigtype ;
 	}
 }
 
-void Tbam_draw_pileup::hline ( unsigned char *bucket , postype from , postype to , postype y ) {
+void Tbam_draw_pileup::hline ( unsigned char *bucket , postype from , postype to , postype y , bool count_in_coverage ) {
 }
 
 string Tbam_draw_pileup::get_text_rendering () {
@@ -855,6 +960,8 @@ string Tbam_draw_pileup::get_text_rendering () {
 		for ( int col = 0 ; col < pile[row].size() && col < size ; col++ ) {
 			if ( pile[row][col].type == PC_EMPTY ) {
 				ret += ' ' ;
+			} else if ( pile[row][col].type &= PC_INSERTION ) {
+				ret += pile[row][col].c - 'A' + 'a' ;
 			} else {
 				ret += pile[row][col].c ;
 			}
@@ -896,10 +1003,26 @@ void Tbam_draw_pileup::merge_all () {
 					if ( i > 255 ) i = 255 ;
 					fill_rect ( x-1 , y-1 , ( col + 1 ) * width / size - 2 , y + row_height - 2 , i , i , i ) ;
 				}
+
 				if ( pile[row][col].type & PC_REFERENCE ) { basecol_red = basecol_green = 0 ; basecol_blue = 255 ; }
 				if ( pile[row][col].type & PC_SINGLE ) { basecol_red = 0 ; basecol_green = 255 ; basecol_blue = 0 ; }
 				if ( pile[row][col].type & PC_SNP ) { basecol_red = 255 ; basecol_green = basecol_blue = 0 ; }
+
+				if ( pile[row][col].type & PC_INSERTION ) {
+					basecol_red = 0 ;
+					basecol_green = 0 ;
+					basecol_blue = 0 ;
+					fill_rect ( x , y-1 , ( col + 1 ) * width / size - 2 , y + row_height - 2 , 0 , 200 , 0 ) ;
+				}
+
+				if ( pile[row][col].type & PC_DELETION ) {
+					basecol_red = 255 ;
+					basecol_green = 0 ;
+					basecol_blue = 0 ;
+				}
+
 				render_char ( pile[row][col].c , x , y ) ;
+
 			}
 		}
 		
@@ -931,6 +1054,32 @@ void Tbam_draw_pileup::merge_all () {
 					} else i = 255 ;
 					basecol_blue = i ;
 				}
+				
+				int x1 = col * width / size ;
+				int x2 = ( col + 1 ) * width / size - 1 ;
+				if ( x1 > x2 ) x2 = x1 ;
+				for ( int x = x1 ; x <= x2 ; x++ ) {
+					set_pixel ( x , y ) ;
+				}
+				
+			}
+		}
+
+		// InDels
+//		basecol_red = 255 ; basecol_green = basecol_blue = 0 ;
+		for ( int row = 0 ; row < pile.size() ; row++ ) {
+			int y = height - ( row + 1 ) ;
+			for ( int col = 0 ; col < pile[row].size() && col < size ; col++ ) {
+				bool doit = false ;
+				if ( pile[row][col].type & PC_INSERTION ) {
+					basecol_red = 0 ; basecol_green = 128 ; basecol_blue = 0 ;
+					doit = true ;
+				} else if ( pile[row][col].type & PC_DELETION ) {
+					basecol_red = 128 ; basecol_green = 0 ; basecol_blue = 0 ;
+					doit = true ;
+				}
+				
+				if ( !doit ) continue ;
 				
 				int x1 = col * width / size ;
 				int x2 = ( col + 1 ) * width / size - 1 ;
@@ -1260,6 +1409,10 @@ void Tbam2png::abort_(const char * s, ...)
 
 void init_lcd_chars () {
 	for ( int a = 0 ; a < 256 ; a++ ) lcd_chars.push_back ( TVI() ) ;
+	
+	lcd_chars['-'].push_back(3);
+	
+	
 	lcd_chars['0'].push_back(0);
 	lcd_chars['0'].push_back(1);
 	lcd_chars['0'].push_back(2);
@@ -1341,6 +1494,13 @@ void init_lcd_chars () {
 	lcd_chars['T'].push_back(0);
 	lcd_chars['T'].push_back(7);
 	lcd_chars['T'].push_back(8);
+	
+	// FIXME
+	lcd_chars['N'].push_back(1);
+	lcd_chars['N'].push_back(2);
+	lcd_chars['N'].push_back(3);
+	lcd_chars['N'].push_back(4);
+	lcd_chars['N'].push_back(5);
 }
 
 
