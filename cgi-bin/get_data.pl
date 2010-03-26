@@ -825,6 +825,7 @@ sub trim_sam_reads
     if ( $start + $seq_len <= $from ) { return (0,'',''); }
 
     my ($out_offset,$out_seq,$out_btype);
+    my $out_ref;
 
     my $ninserts = 0;
     my $ndels = 0;
@@ -858,6 +859,8 @@ sub trim_sam_reads
                     $out_btype .= chr($mode + 65);
                 }
 
+                $out_ref .= $ref;
+
                 $iref++;
                 $iseq++;
             }
@@ -865,16 +868,27 @@ sub trim_sam_reads
         }
         elsif ( $type eq 'D' )
         {
+            $out_ref .= substr($refseq,$start + $iseq - $ninserts + $ndels - $from,$count);
             $out_seq   .= '*' x $count;
             $out_btype .= chr($MODE_DELETION + 65) x $count;
             $ndels += $count;
         }
         elsif ( $type eq 'I' )
         {
-            $out_seq   .= uc substr($seq,$iseq,$count);
-            $out_btype .= chr($MODE_INSERTION + 65) x $count;
-            $iseq += $count;
-            $ninserts += $count;
+            if ( $iseq+$start<$from )
+            {
+                # In case the insertion is not visible (hidden to the left), do not display it.
+                $iseq += $count;
+                $ninserts += $count;
+            }
+            else
+            {
+                $out_ref .= '*' x $count;
+                $out_seq   .= uc substr($seq,$iseq,$count);
+                $out_btype .= chr($MODE_INSERTION + 65) x $count;
+                $iseq += $count;
+                $ninserts += $count;
+            }
         }
         elsif ( $type eq 'H' ) 
         {
@@ -888,11 +902,11 @@ sub trim_sam_reads
         }
         else { die "Could not parse the cigar $seq .. $cigar.\n" }
     }
-
     if ( $start < $from )
     {
         substr($out_seq, 0, $from-$start,'');
         substr($out_btype, 0, $from-$start,'');
+        substr($out_ref, 0, $from-$start,'');
         $start = $from;
     }
     if ( $start + length($out_seq) - 1 > $to ) 
