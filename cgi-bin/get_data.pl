@@ -825,7 +825,6 @@ sub trim_sam_reads
     if ( $start + $seq_len <= $from ) { return (0,'',''); }
 
     my ($out_offset,$out_seq,$out_btype);
-    my $out_ref;
 
     my $ninserts = 0;
     my $ndels = 0;
@@ -859,8 +858,6 @@ sub trim_sam_reads
                     $out_btype .= chr($mode + 65);
                 }
 
-                $out_ref .= $ref;
-
                 $iref++;
                 $iseq++;
             }
@@ -868,7 +865,6 @@ sub trim_sam_reads
         }
         elsif ( $type eq 'D' )
         {
-            $out_ref .= substr($refseq,$start + $iseq - $ninserts + $ndels - $from,$count);
             $out_seq   .= '*' x $count;
             $out_btype .= chr($MODE_DELETION + 65) x $count;
             $ndels += $count;
@@ -883,7 +879,6 @@ sub trim_sam_reads
             }
             else
             {
-                $out_ref .= '*' x $count;
                 $out_seq   .= uc substr($seq,$iseq,$count);
                 $out_btype .= chr($MODE_INSERTION + 65) x $count;
                 $iseq += $count;
@@ -906,7 +901,6 @@ sub trim_sam_reads
     {
         substr($out_seq, 0, $from-$start,'');
         substr($out_btype, 0, $from-$start,'');
-        substr($out_ref, 0, $from-$start,'');
         $start = $from;
     }
     if ( $start + length($out_seq) - 1 > $to ) 
