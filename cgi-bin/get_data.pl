@@ -893,6 +893,7 @@ sub trim_sam_reads
         elsif ( $type eq 'S' ) 
         {
             # Ignore soft clips
+            $iseq  += $count;
             next;
         }
         else { die "Could not parse the cigar $seq .. $cigar.\n" }
@@ -2442,6 +2443,12 @@ sub sam_read_data {
         if ( $nlines>$max_nlines ) 
         { 
             error_exit("Sorry, there are too many (>$max_nlines) reads in this region."); 
+        }
+
+        if ( $a[4]=~/^(\d+)S/ )
+        {
+            $a[4] = $';
+            $a[8] = substr($a[8],$1);
         }
 
         if ( $max_insert_size ) { next }
