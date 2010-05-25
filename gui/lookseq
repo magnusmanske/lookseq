@@ -37,7 +37,6 @@ sub error
 sub parse_params
 {
     my $opts = { config=>"$ENV{HOME}/.lookseq", verbose=>0 };
-    $$opts{last_state} = "$$opts{config}/last_state";
     $$opts{display_all_chrms} = 0;
     $$opts{chrms} = '[0-9XY]+';
 
@@ -51,6 +50,7 @@ sub parse_params
         if ( -e $arg ) { $$opts{bam} = $arg; next; }
         error("Unknown parameter or non-existent file \"$arg\". Run -h for help.\n");
     }
+    $$opts{last_state} = "$$opts{config}/last_state";
     $$opts{settings} = "$$opts{config}/settings.pm";
 
     $$opts{get_data} = "$FindBin::RealBin/../cgi-bin/get_data.pl";
