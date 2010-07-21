@@ -186,9 +186,10 @@ sub read_state
             chr => 1,
             from => 5783647,
             zoom => '100b',
+            mapq => 0,
         };
     }
-    for my $key qw(insert_size width view_mode chr from zoom)
+    for my $key qw(insert_size width view_mode chr from zoom mapq)
     {
         if ( exists($$saved_opts{$key}) && defined $$saved_opts{$key} ) { $$opts{$key} = $$saved_opts{$key}; }
     }
@@ -198,7 +199,7 @@ sub save_state
 {
     my ($opts) = @_;
     my $to_save = {};
-    for my $key qw(insert_size width view_mode chr from zoom)
+    for my $key qw(insert_size width view_mode chr from zoom mapq)
     {
         $$to_save{$key} = $$opts{$key};
     }
@@ -274,6 +275,8 @@ sub run
     $$opts{tk_zoom} = $mw->Entry(-width=>6, %entry_args, -text=>$$opts{zoom})->pack(-side=>'left');
     $mw->Label(-text=>'   Insert size:', %label_args)->pack(-side=>'left');
     $$opts{tk_insert_size} = $mw->Entry(-width=>6, %entry_args, -text=>$$opts{insert_size})->pack(-side=>'left');
+    $mw->Label(-text=>'   MapQ cutoff:', %label_args)->pack(-side=>'left');
+    $$opts{tk_mapq} = $mw->Entry(-width=>3, %entry_args, -text=>$$opts{mapq})->pack(-side=>'left');
 
     $mw->Button(-text=>'Refresh' ,-command=>[\&refresh,$opts], %button_args)->pack(-side=>'right');
     $mw->Label(-textvariable=>\$$opts{tk_position})->pack(-side=>'right');
@@ -315,6 +318,11 @@ sub refresh
         $$opts{insert_size} = $$opts{tk_insert_size}->get();
     }
 
+    if ( $$opts{tk_mapq} )
+    {
+        $$opts{mapq} = $$opts{tk_mapq}->get();
+    }
+
     if ( $$opts{tk_position_from} )
     {
         my $from = $$opts{tk_position_from}->get();
@@ -338,8 +346,9 @@ sub main_image
     my $from = $$opts{from};
     my $to   = $$opts{to};
 
+    my $mapq = $$opts{mapq} ? "mapq=$$opts{mapq}" : '';
     my $view = $$opts{view_mode} eq 'pileup' ? 'paired_pileup' : 'indel';
-    my $args = qq[output=image width=$$opts{width} view=$view maxdist=$$opts{insert_size} display='|perfect|single|inversions|pairlinks|potsnps|uniqueness|gc|coverage|' debug=0 lane=file.bam];
+    my $args = qq[output=image width=$$opts{width} view=$view maxdist=$$opts{insert_size} display='|perfect|single|inversions|pairlinks|potsnps|uniqueness|gc|coverage|' debug=0 lane=file.bam $mapq];
     my $out = CMD("$$opts{get_data} $args from=$from to=$to chr=$chr",$opts);
     if ( !$out ) { return; }
 
@@ -382,7 +391,8 @@ sub depth_image
     my $from = $$opts{from};
     my $to   = $$opts{to};
 
-    my $args = qq[output=image width=$$opts{width} view=coverage maxdist=$$opts{insert_size} display='|perfect|single|inversions|pairlinks|potsnps|uniqueness|gc|coverage|' debug=0 lane=file.bam];
+    my $mapq = $$opts{mapq} ? "mapq=$$opts{mapq}" : '';
+    my $args = qq[output=image width=$$opts{width} view=coverage maxdist=$$opts{insert_size} display='|perfect|single|inversions|pairlinks|potsnps|uniqueness|gc|coverage|' debug=0 lane=file.bam $mapq];
     my $out = CMD("$$opts{get_data} $args from=$from to=$to chr=$chr",$opts);
     if ( !$out ) { return; }
 
