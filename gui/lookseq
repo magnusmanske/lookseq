@@ -250,6 +250,7 @@ sub run
     $mw->bind("<Control-q>" => \&exit);
     $mw->bind("<Key-Left>" => [\&move_left,$opts]);
     $mw->bind("<Key-Right>" => [\&move_right,$opts]);
+    $mw->bind("<Control-c>" => [\&position_to_clipboard,$opts]);
 
     main_image($opts);
 
@@ -497,6 +498,16 @@ sub move_to_position
     $$opts{to}   += $delta;
 
     main_image($opts);
+}
+
+sub position_to_clipboard
+{
+    my ($widget,$opts) = @_;
+    $$opts{tk_window}->clipboardClear();
+    $$opts{tk_window}->clipboardAppend('--',$$opts{tk_position});
+    $$opts{tk_window}->SelectionClear;
+    $$opts{tk_window}->SelectionHandle( sub {$$opts{tk_position}} );
+    $$opts{tk_window}->SelectionOwn;
 }
 
 sub update_position_entry
