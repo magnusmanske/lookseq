@@ -503,10 +503,9 @@ sub move_to_position
 sub position_to_clipboard
 {
     my ($widget,$opts) = @_;
-    $$opts{tk_window}->clipboardClear();
-    $$opts{tk_window}->clipboardAppend('--',$$opts{tk_position});
+    $$opts{clipboard} = $$opts{tk_position};
     $$opts{tk_window}->SelectionClear;
-    $$opts{tk_window}->SelectionHandle( sub {$$opts{tk_position}} );
+    $$opts{tk_window}->SelectionHandle( sub {return $$opts{clipboard}} );
     $$opts{tk_window}->SelectionOwn;
 }
 
