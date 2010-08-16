@@ -1,5 +1,11 @@
 Run e.g. as
     lookseq file.bam -r reference.fa
 
+Hot keys:
+    left/right arrow    .. move viewport left/right
+    ctrl+q              .. quit
+    ctrl+c              .. copy the current position to clipboard
+    ctrl+g              .. go the position in clipboard
+
 Questions & comments to Petr Danecek, pd3@sanger
 
