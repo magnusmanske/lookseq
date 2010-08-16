@@ -251,6 +251,7 @@ sub run
     $mw->bind("<Key-Left>" => [\&move_left,$opts]);
     $mw->bind("<Key-Right>" => [\&move_right,$opts]);
     $mw->bind("<Control-c>" => [\&position_to_clipboard,$opts]);
+    $mw->bind("<Control-g>" => [\&go_to_position,$opts]);
 
     main_image($opts);
 
@@ -507,6 +508,16 @@ sub position_to_clipboard
     $$opts{tk_window}->SelectionClear;
     $$opts{tk_window}->SelectionHandle( sub {return $$opts{clipboard}} );
     $$opts{tk_window}->SelectionOwn;
+}
+
+sub go_to_position
+{
+    my ($widget,$opts) = @_;
+    my $from = $$opts{tk_window}->SelectionGet();
+    if ( !defined $from or !($from=~/^\d+$/) ) { return; }
+    $$opts{to}  += $from-$$opts{from};
+    $$opts{from} = $from;
+    main_image($opts);
 }
 
 sub update_position_entry
