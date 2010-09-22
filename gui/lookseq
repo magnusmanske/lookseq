@@ -39,6 +39,7 @@ sub parse_params
     my $opts = { config=>"$ENV{HOME}/.lookseq", verbose=>0, bams=>[] };
     $$opts{display_all_chrms} = 0;
     $$opts{chrms} = '[0-9XY]+';
+    chomp($$opts{pwd}=`pwd`);
 
     my $reference;
     while (my $arg=shift(@ARGV))
@@ -228,14 +229,17 @@ sub read_state
             current_file => 0,
             win_border => 35,
             width_slack => 50,
+            pwd => $$opts{pwd},
         };
     }
     $$opts{watch_vars} = [ qw(width) ];
-    $$opts{save_vars}  = [ @{$$opts{watch_vars}}, qw(from to current_file insert_size view_mode chr from zoom mapq min_width files win_border width_slack) ];
+    $$opts{save_vars}  = [ @{$$opts{watch_vars}}, qw(from to current_file insert_size view_mode chr from zoom mapq min_width win_border width_slack files pwd) ];
     for my $key (@{$$opts{save_vars}})
     {
         if ( exists($$saved_opts{$key}) && defined $$saved_opts{$key} ) { $$opts{$key} = $$saved_opts{$key}; }
     }
+    if ( scalar @{$$opts{bams}} ) { $$opts{files}=$$opts{bams}; }
+    chdir($$opts{pwd});
 }
 
 sub save_state
