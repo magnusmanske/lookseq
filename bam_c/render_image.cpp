@@ -1316,7 +1316,9 @@ void Tbam2png::write_png_file(char* file_name)
 	int x, y;
 
 	// create file 
-	FILE *fp = fopen(file_name, "wb");
+	string fn ( file_name ) ;
+	bool is_stdout = fn == "-" ;
+	FILE *fp = is_stdout ? freopen(NULL, "wb", stdout) : fopen(file_name, "wb");
 	if (!fp)
 		abort_("[write_png_file] File %s could not be opened for writing", file_name);
 
@@ -1366,7 +1368,7 @@ void Tbam2png::write_png_file(char* file_name)
 		free(row_pointers[y]);
 	free(row_pointers);
 
-        fclose(fp);
+        if ( !is_stdout ) fclose(fp);
 }
 
 
