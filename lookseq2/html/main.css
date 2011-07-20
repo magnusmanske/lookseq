@@ -1,0 +1,250 @@
+/* BEGIN CGGH LOOKALIKE */
+a {
+	text-decoration: none;
+	color: #36b;
+	background: none;
+}
+a:visited {
+	color: #36b;
+}
+a:active {
+	color: #36b;
+}
+a:hover {
+	text-decoration: underline;
+}
+/* END CGGH LOOKALIKE */
+
+
+
+.sample_cell {
+	white-space:nowrap;
+	border-left:1px solid #AAAAFF;
+	text-align:center;
+}
+
+#load_anno {
+	float:left;
+	font-size:10pt
+}
+
+#td_about {
+	padding-left:2px;
+}
+
+.header_td {
+	padding-left:2px;
+	vertical-align:top;
+	border:2px;
+	border-style:none none none ridge;
+}
+
+#lookseq_container {
+	position:absolute;
+	top:0px;
+	bottom:0px;
+	left:0px;
+	right:0px;
+	padding:0px;
+	margin:0px;
+	overflow:hidden;
+}
+
+#lookseq_header {
+	font-family:Verdana;
+	font-size:80px;
+	color:#BBBBBB;
+	text-shadow: 3px 3px 6px #000;
+	padding-left:10px;
+}
+
+.symbolimage {
+	border-style:none;
+	padding:3px;
+	height:26px;
+}
+
+.symbolimage:hover {
+	padding:0px;
+	border-style:ridge;
+}
+
+#search_query {
+	font-size:8pt;
+}
+
+#search_dialog {
+	font-size:9pt;
+}
+
+#position_on_chromosome {
+	font-family:Courier;
+	color:white;
+	text-shadow: 2px 2px 4px #000;
+	text-align:right;
+}
+
+.annotation_marker {
+	position:absolute;
+	color:white;
+	font-size:8pt;
+	font-family:Arial;
+	font-weight:bold;
+	text-align:center;
+	cursor:pointer;
+	overflow:hidden;
+}
+
+.position_marker {
+	color:#888888;
+	position:absolute;
+	top:1px;
+	height:20px;
+	border-left:1px solid black;
+	padding-left:2px;
+	font-size:9pt;
+	cursor:default;
+}
+
+#zoom {
+	text-align:center;
+/*	border-style:none ridge none ridge;*/
+	padding-left:2px;
+	padding-right:2px
+}
+
+.zoomimage {
+	width:24px;
+	cursor:pointer;
+	border-style:none;
+	padding:3px;
+	margin-right:5px;
+}
+
+.zoomimage:hover {
+	padding:0px;
+	border-style:groove;
+}
+
+.pileuptextlink {
+	position:absolute;
+	padding:1px;
+	left:5px;
+	top:0px;
+	z-index:5;
+	font-size:8pt;
+	text-shadow: 0.1em 0.1em white;
+}
+
+.pileuptextlink:hover {
+	background:white;
+	font-size:12pt;
+}
+
+.tracknote {
+	position:absolute;
+	padding:1px;
+	right:20px;
+	top:0px;
+	color:#999999;
+	z-index:5;
+	font-size:8pt;
+	cursor:default;
+}
+
+.tracknote:hover {
+	color:black;
+	background:white;
+	font-size:12pt;
+	cursor:default;
+}
+
+.trackimage_img {
+	background-color:#AAAAAA;
+	cursor:col-resize;
+}
+
+.trackimage {
+	position:absolute;
+	left:0px;
+	top:0px;
+}
+
+.track {
+	position:absolute;
+	overflow:hidden;
+	-moz-user-select: none;
+	-webkit-user-select: none;
+	user-select: none;
+}
+
+#trackstop {
+	position:absolute;
+	width:100%;
+}
+
+#tracks {
+	position:absolute;
+	width:100%;
+	overflow-Y:scroll;
+	overflow-X:hidden;
+}
+
+#samples {
+	width:100%;
+	display:none;
+}
+
+#login_status {
+	float:right;
+	margin-left:10px;
+	margin-right:5px;
+	text-align:right;
+	z-index:2;
+}
+
+.roundedCorners {
+	padding: 2px;
+	background-color: #DDDDDD;/*#DBF0F7;*/
+	border:1px solid black;
+	-webkit-border-radius: 6px;
+	-moz-border-radius: 6px;
+	
+	-moz-box-shadow: 10px 10px 5px #888888; /* Firefox */
+	-webkit-box-shadow: 10px 10px 5px #888888; /* Safari and Chrome */
+	box-shadow: 10px 10px 5px #888888;
+}
+
+div#header {
+	position:absolute;
+	left:5px;
+	right:5px;
+	top:5px;
+	height:112px;
+
+}
+
+div#main {
+	position:absolute;
+	left:5px;
+	top:130px;
+	bottom:135px;
+	width:0px;
+}
+
+div#sidebar {
+	position:absolute;
+	right:5px;
+	top:130px;
+	bottom:135px;
+	width:200px;
+}
+
+div#footer {
+	display:none;
+	position:absolute;
+	left:5px;
+	right:5px;
+	bottom:5px;
+	height:80px;
+}

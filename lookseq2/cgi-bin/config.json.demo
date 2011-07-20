@@ -1,0 +1,22 @@
+{
+    "species" : {
+        "pf" : {
+            "name" : "Plasmodium falciparum" ,
+            "fasta" : "/local/path/to/file.fasta" ,
+            "gff" : "/local/path/to/file.gff"
+        }
+    } ,
+    
+    "samples" : {
+        "Sample_1"  : { "bam" : "/local/path/to/file.bam" , "species" : "pf" , "alg" : "bwa" , "group" : "Test" } ,
+        "Sample_2"  : { "bam" : "ftp://ftp.my.server/some.bam" , "species" : "pf" , "alg" : "bwa" , "group" : "Test" } ,
+        "Sample_3"  : { "bam" : "/local/path/to/other_file.bam" , "species" : "pf" , "alg" : "bwa" , "group" : "Test 2" } ,
+        
+    } ,
+    
+    "misc" : {
+        "tmp" : "/tmp" ,
+        "render_command" : "/bin/render_image"
+    }
+    
+}

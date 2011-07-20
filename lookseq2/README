@@ -1,0 +1,22 @@
+NOTES
+* This version of LookSeq is new, so it might contain some bugs.
+* No user management - yet. Everyone can see all samples.
+
+
+SETUP
+
+1. Create a web-accessible subdirectory for Perl scripts on your webserver, and copy the contents of "cgi-bin" there.
+
+2. Create a web-accessible subdirectory for HTML and JavaScript files on your webserver, and copy the contents of "html" there.
+
+3. Copy "render_image" (in "bam_c" of the parent directory) to a location where it can be seen and executed by the webserver (or rather, the Perl script you copied from "cgi-bin"). If "render_image" doesn't run on your architexture, you'll have to compile it yourself. Good luck.
+
+4. Prepare a data directory that can be accessed by internal path by the webserver. The data should include fasta and gff files for the species you use, and BAM files. For BAM files, FTP/HTTP locations might suffice (untested).
+
+5. In the new "cgi-bin" sub-directory, move or copy "config.json.demo" to "config.json" and adapt it to your local settings, according to the given examples.
+
+6. In the new "html" sub-directory, move or copy "config.js.demo" to "config.js" and adapt it to your local settings, that is, give the web-viewable path to the Perl script.
+
+7. Point your browser to the URL of the "index.html" file you copied into the new "html" sub-directory.
+
+Done!
