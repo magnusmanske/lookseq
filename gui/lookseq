@@ -12,7 +12,14 @@ use File::Spec;
 
 my $opts = parse_params();
 init($opts);
-run($opts);
+if ( exists($$opts{save_as}) )
+{
+    save_image($opts);
+}
+else
+{
+    run($opts);
+}
 
 exit;
 
@@ -23,11 +30,12 @@ sub error
     my (@msg) = @_;
     if ( scalar @msg ) { confess @msg; }
     die
-        "Usage: lookseq [OPTIONS] <file1.bam> <Title:file2.bam>\n",
+        "Usage: lookseq [OPTIONS] <file1.bam> <Title:file2.bam> chr:from-to\n",
         "Options:\n",
         "   -c, --config <dir>              Where to save temporary data (default is \$HOME/.lookseq).\n",
         "   -C, --chromosomes <regex>       The default is '[0-9XY]+' (1-22,X,Y), change to '.*' to match everything.\n",
         "   -r, --reference <file.fa>       The reference fasta file.\n",
+        "   -s, --save-as <file.png>        Do not run the GUI, just save the image\n",
         "   -v, --verbose                   Print lookseq commands executed.\n",
         "   -h, -?, --help                  This help message.\n",
         "\n";
@@ -47,10 +55,12 @@ sub parse_params
         if ( $arg eq '-C' || $arg eq '--chromosomes' ) { $$opts{chrms} = shift(@ARGV); next }
         if ( $arg eq '-c' || $arg eq '--config' ) { $$opts{config} = shift(@ARGV); next }
         if ( $arg eq '-r' || $arg eq '--reference' ) { $reference = shift(@ARGV); next }
+        if ( $arg eq '-s' || $arg eq '--save-as' ) { $$opts{save_as} = shift(@ARGV); next }
         if ( $arg eq '-v' || $arg eq '--verbose' ) { $$opts{verbose} = 1; next }
         if ( $arg eq '-?' || $arg eq '-h' || $arg eq '--help' ) { error(); }
         if ( -e $arg ) { push @{$$opts{bams}}, {file=>$arg,ref=>$reference}; next; }
         if ( $arg=~/^([^:]+):(.+)$/ && -e $2 ) { push @{$$opts{bams}}, {file=>$2,title=>$2,ref=>$reference}; next; }
+        if ( $arg=~/^([^:]+):(\d+)-(\d+)$/ ) { $$opts{cmdline}{chr}=$1; $$opts{cmdline}{from}=$2; $$opts{cmdline}{to}=$3; next; }
         error("Unknown parameter or non-existent file \"$arg\". Run -h for help.\n");
     }
     $$opts{last_state} = "$$opts{config}/last_state";
@@ -68,6 +78,7 @@ sub parse_params
 
     for my $bam (@{$$opts{bams}})
     {
+        if ( ! defined $$bam{ref} ) { error("No reference for $$bam{file}?\n"); }
         if ( !$$bam{ref} ) { $$bam{ref}=$reference; }
         if ( ! -e $$bam{ref} ) { error("No such file: $$bam{ref}\n"); }
     }
@@ -237,6 +248,7 @@ sub read_state
     for my $key (@{$$opts{save_vars}})
     {
         if ( exists($$saved_opts{$key}) && defined $$saved_opts{$key} ) { $$opts{$key} = $$saved_opts{$key}; }
+        if ( exists($$opts{cmdline}{$key}) ) { $$opts{$key} = $$opts{cmdline}{$key}; }
     }
     if ( scalar @{$$opts{bams}} ) { $$opts{files}=$$opts{bams}; }
     chdir($$opts{pwd});
@@ -535,6 +547,42 @@ sub main_image
     $$opts{tk_window}->Unbusy(-recurse=>1);
 }
 
+
+sub save_image
+{
+    my ($opts) = @_;
+
+    if ( !exists($$opts{cmdline}{chr}) or !exists($$opts{cmdline}{from}) or !exists($$opts{cmdline}{to}) ) { error("Missing region\n"); } 
+    my $chr  = $$opts{cmdline}{chr};
+    my $from = $$opts{cmdline}{from};
+    my $to   = $$opts{cmdline}{to};
+
+    # Do the main image
+    my $mapq = $$opts{mapq} ? "mapq=$$opts{mapq}" : '';
+    my $view = $$opts{view_mode} eq 'pileup' ? 'paired_pileup' : 'indel';
+    my $args = qq[output=image width=$$opts{width} view=$view maxdist=$$opts{insert_size} display='|perfect|single|inversions|pairlinks|potsnps|uniqueness|gc|coverage|' debug=0 lane=file.bam $mapq];
+    my $out = CMD("$$opts{get_data} $args from=$from to=$to chr=$chr",$opts);
+    if ( !$out ) { return; }
+    strip_http_header($out);
+    open(my $fh,'>',"$$opts{save_as}.main.png") or error("$$opts{save_as}.main.png: $!"); 
+    print $fh join('',@$out);
+    close($fh);
+
+    # Do the depth image
+    $args = qq[output=image width=$$opts{width} view=coverage maxdist=$$opts{insert_size} display='|perfect|single|inversions|pairlinks|potsnps|uniqueness|gc|coverage|' debug=0 lane=file.bam $mapq];
+    $out = CMD("$$opts{get_data} $args from=$from to=$to chr=$chr",$opts);
+    if ( !$out ) { return; }
+    strip_http_header($out);
+    open($fh,'>',"$$opts{save_as}.dp.png") or error("$$opts{save_as}.dp.png: $!"); 
+    print $fh join('',@$out);
+    close($fh);
+
+    # The 2>/dev/null is because of
+    #   montage: unable to read font `/software/solexa/lib/ImageMagick-6.3.7/config//usr/share/ghostscript/fonts/n019003l.pfb'.
+    CMD("montage -quiet -tile 1x2 -geometry 100%x100% $$opts{save_as}.main.png $$opts{save_as}.dp.png $$opts{save_as} 2>/dev/null");
+    unlink("$$opts{save_as}.main.png");
+    unlink("$$opts{save_as}.dp.png");
+}
 
 
 
