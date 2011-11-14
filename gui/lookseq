@@ -34,6 +34,8 @@ sub error
         "Options:\n",
         "   -c, --config <dir>              Where to save temporary data (default is \$HOME/.lookseq).\n",
         "   -C, --chromosomes <regex>       The default is '[0-9XY]+' (1-22,X,Y), change to '.*' to match everything.\n",
+        "   -i, --insert-size <int|Auto>    Default insert size.\n",
+        "   -H, --image-height <int>        The main image height; used with -s.\n",
         "   -r, --reference <file.fa>       The reference fasta file.\n",
         "   -s, --save-as <file.png>        Do not run the GUI, just save the image\n",
         "   -v, --verbose                   Print lookseq commands executed.\n",
@@ -55,6 +57,8 @@ sub parse_params
         if ( $arg eq '-C' || $arg eq '--chromosomes' ) { $$opts{chrms} = shift(@ARGV); next }
         if ( $arg eq '-c' || $arg eq '--config' ) { $$opts{config} = shift(@ARGV); next }
         if ( $arg eq '-r' || $arg eq '--reference' ) { $reference = shift(@ARGV); next }
+        if ( $arg eq '-i' || $arg eq '--insert-size' ) { $$opts{cmdline}{insert_size}= shift(@ARGV); next }
+        if ( $arg eq '-H' || $arg eq '--image-height' ) { $$opts{cmdline}{height}= shift(@ARGV); next }
         if ( $arg eq '-s' || $arg eq '--save-as' ) { $$opts{save_as} = shift(@ARGV); next }
         if ( $arg eq '-v' || $arg eq '--verbose' ) { $$opts{verbose} = 1; next }
         if ( $arg eq '-?' || $arg eq '-h' || $arg eq '--help' ) { error(); }
@@ -560,7 +564,8 @@ sub save_image
     # Do the main image
     my $mapq = $$opts{mapq} ? "mapq=$$opts{mapq}" : '';
     my $view = $$opts{view_mode} eq 'pileup' ? 'paired_pileup' : 'indel';
-    my $args = qq[output=image width=$$opts{width} view=$view maxdist=$$opts{insert_size} display='|perfect|single|inversions|pairlinks|potsnps|uniqueness|gc|coverage|' debug=0 lane=file.bam $mapq];
+    my $height = $$opts{cmdline}{height} ? "height=$$opts{cmdline}{height}" : '';
+    my $args = qq[output=image width=$$opts{width} $height view=$view maxdist=$$opts{insert_size} display='|perfect|single|inversions|pairlinks|potsnps|uniqueness|gc|coverage|' debug=0 lane=file.bam $mapq];
     my $out = CMD("$$opts{get_data} $args from=$from to=$to chr=$chr",$opts);
     if ( !$out ) { return; }
     strip_http_header($out);
@@ -579,7 +584,7 @@ sub save_image
 
     # The 2>/dev/null is because of
     #   montage: unable to read font `/software/solexa/lib/ImageMagick-6.3.7/config//usr/share/ghostscript/fonts/n019003l.pfb'.
-    CMD("montage -quiet -tile 1x2 -geometry 100%x100% $$opts{save_as}.main.png $$opts{save_as}.dp.png $$opts{save_as} 2>/dev/null");
+    CMD("convert -append $$opts{save_as}.main.png $$opts{save_as}.dp.png $$opts{save_as} 2>/dev/null");
     unlink("$$opts{save_as}.main.png");
     unlink("$$opts{save_as}.dp.png");
 }
