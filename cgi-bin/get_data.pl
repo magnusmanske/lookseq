@@ -136,7 +136,7 @@ my ( @sam_single , @sam_perfect , @sam_snps , @sam_inversions , @sam_capillary, 
 my $sam_max_found_fragment = 0 ;
 my $im ;
 my ( $sam_white , $sam_black , $sam_col_single_read , $sam_col_mismatch , $sam_col_matching_read , $sam_col_inversion , $sam_col_read_pair_connection ) ;
-my ( $sam_col_read_pair_quality , $sam_col_single_read_quality, $sam_col_mapqual_zero ) ;
+my ( $sam_col_read_pair_quality , $sam_col_single_read_quality, $sam_col_mapqual_zero, $col_insertion, $col_deletion ) ;
 
 if ( $view eq 'gc' ) 
 {
@@ -618,6 +618,7 @@ sub dump_image_pileupview {
 	
 	if ( $using_bam ) {
 		$show_chars = $width / $ft > 4 ? 1 : 0 ;
+        if ( !$show_chars ) { &dump_image_indelview; }
 #	print $cgi->header(-type=>'text/plain',-expires=>'-1s'); 
 		pile2bands_sam ( \@bands , \@btype , 0 , $paired_pileup , \@sam_perfect ) ;
 		pile2bands_sam ( \@bands , \@btype , 0 , $paired_pileup , \@sam_perfect_singles ) ;
@@ -1411,7 +1412,8 @@ sub dump_image_indelview {
 	my $orange = $im->colorAllocate ( 0xFF , 0xAA , 0x00 ) ;
 	my $grey = $im->colorAllocate ( @{$lscolor{'grey'}} ) ;
     my $col_mapqual_zero = $im->colorAllocate( @{$lscolor{'mapqual_zero'}} );
-
+    $col_insertion = $im->colorAllocate( 0x66, 0xdd, 0x66 );
+    $col_deletion  = $im->colorAllocate( 0xdd, 0x66, 0x66  );
 	
 	my @ann_color = ( $black , $blue , $red , $single_color , $orange , $inversion_right_color, $inversion_middle_color , $variance_color  , $inversion_left_color , $inversion_color ) ;
 	
@@ -2435,6 +2437,7 @@ sub sam_read_data {
 		$_ =~ /^(\S+)\s/ ;
 		my $id = $1;
 		my @a = split "\t" , $';
+
         if ( 0x0004 & $a[0] ) { next; } # This read is unmapped
         if ( $mapq_cutoff && $a[3]<$mapq_cutoff ) { next }   # This read has lower MAPQ
 		push @{$sam_reads{$id}} , \@a;
@@ -2651,6 +2654,7 @@ sub sam_paint_short_read_pair_connections {
 		$x1 = int ( $x1 * $width / $ft ) ;
 		$x2 = int ( $x2 * $width / $ft ) ;
 #		print "$x1/$y -> $x2/$y | $height | $scale_height | $max_dist\n" ;
+        #if ( !($x1==289 && $x2==957) ) { next; }
 		$im->line ( $x1 , $y , $x2 , $y , $col ) ;
 	}
 }
@@ -2761,76 +2765,95 @@ sub sam_paint_short_read_pair {
 	sam_paint_single_short_read ( $r->[1] , $col , $y , $draw_snps ) ;
 }
 
-sub sam_paint_single_short_read {
+sub sam_paint_single_short_read 
+{
 	my ( $r , $col , $y , $draw_snps ) = @_ ;
-#	print $r->[4] . "\n" ;
-	if ( $r->[4] =~ m/^\d+M$/ ) {
-		sam_paint_single_short_read_allmatch ( @_ ) ;
-	} else {
-		sam_paint_single_short_read_cigar ( @_ ) ;
-	}
-}
-
-sub sam_paint_single_short_read_cigar {
-	# TODO
-}
-
-#my ($start,$seq,$btype) = trim_sam_reads($r->[0]->[8],$r->[0]->[4],$mode,$r->[0]->[2]);
-sub sam_paint_single_short_read_allmatch {
-	my ( $r , $col , $y , $draw_snps ) = @_ ;
-	my $x1 = $r->[2] - $from ;
-	my $x2 = $x1 + length $r->[8] ;
 
     if ( $y < 0 ) { return; }
     if ( $y > $height ) { return; }
 
-    if ( $x2 < 0 ) { return; }
-    if ( $x1 > $to-$from ) { return; }
-
-    $x1 = int( $x1*$width/$ft);
-    $x2 = int( $x2*$width/$ft);
-
-    if ( $x1<0 ) { $x1 = 0; }
-    if ( $x2>=$width ) { $x2 = $width-1; }
-    if ( $x1 == $x2 ) { return; }
-
-	$im->line ( $x1 , $y , $x2 , $y , $col ) ;
-	if ( $sam_show_read_arrows ) 
+    my $xfrom = $r->[2] - $from;
+    my $cigar = $r->[4];
+    while ($cigar=~/^(\d+)(\D)/)
     {
-		if ( $r->[0] & 0x0010 ) 
+        my $nbases = $1;
+        my $type   = $2;
+        $cigar = $';
+
+        my $x1 = $xfrom;
+        my $x2 = $xfrom + $nbases;
+
+        $xfrom += $nbases;
+        if ( $x1 > $to-$from or $x2 < 0 ) { next; }
+
+        $x1 = int( $x1*$width/$ft);
+        $x2 = int( $x2*$width/$ft);
+
+        if ( $x1<0 ) { $x1 = 0; }
+        if ( $x2>=$width ) { $x2 = $width-1; }
+        if ( $x1 == $x2 ) { next; }
+
+        if ( $type eq 'M' ) 
         { 
-            # reverse
-            #
-            # Make the arrows little smaller and do not scale with size
-			#   my $xn = int ( $x1 + ( $x2 - $x1 ) / 5 ) ;
-			#   $im->line ( $x1 , $y , $xn , $y+2 , $col ) if $xn != $x1 ;
-			$im->line($x1 , $y , $x1+2 , $y+2, $col );
-		} 
-        else 
+            $im->line($x1, $y, $x2, $y, $col);
+        }
+        elsif ( $type eq 'I' )
         {
-			#my $xn = int ( $x2 - ( $x2 - $x1 ) / 5 ) ;
-			#$im->line ( $xn , $y-2 , $x2 , $y , $col ) if $xn != $x2 ;
-			$im->line($x2 , $y , $x2-2 , $y-2, $col );
-		}
-	}
-	
-	return unless $draw_snps ;
-	return if 0 == sam_check4snps ( $r ) ;
+            $im->line($x1, $y-1, $x2, $y-1, $col_insertion);
+            $xfrom -= $nbases;
+        }
+        elsif ( $type eq 'D' )
+        {
+            $im->line($x1, $y, $x2, $y, $col_deletion);
+        }
+    }
 
-=cut
-	my ($start,$seq,$btype) = trim_sam_reads($r->[8],$r->[4],0,$r->[2]);
-	while ( $seq =~ m/[a-z]/g ) {
-		$x1 = int ( ( $start - $from + pos ( $seq ) - 1  ) * $width / $ft ) ;
-		$im->line ( $x1 , $y-2 , $x1 , $y+2 , $sam_col_mismatch ) ;
-	}
-=cut
+    # return unless $draw_snps;
+	# while ( $r->[8] =~ m/[a-z]/g ) 
+    # {
+	# 	$x1 = int ( ( $r->[2] - $from + pos ( $r->[8] ) - 1  ) * $width / $ft ) ;
+	# 	$im->line ( $x1 , $y-2 , $x1 , $y+2 , $sam_col_mismatch ) ;
+	# }
 
-#=cut
-	while ( $r->[8] =~ m/[a-z]/g ) {
-		$x1 = int ( ( $r->[2] - $from + pos ( $r->[8] ) - 1  ) * $width / $ft ) ;
-		$im->line ( $x1 , $y-2 , $x1 , $y+2 , $sam_col_mismatch ) ;
-	}
-#=cut
+	#   my $x1 = $r->[2] - $from ;
+	#   my $x2 = $x1 + length $r->[8] ;
+    #
+    #   if ( $y < 0 ) { return; }
+    #   if ( $y > $height ) { return; }
+    #
+    #   if ( $x2 < 0 ) { return; }
+    #   if ( $x1 > $to-$from ) { return; }
+    #
+    #   $x1 = int( $x1*$width/$ft);
+    #   $x2 = int( $x2*$width/$ft);
+    #
+    #   if ( $x1<0 ) { $x1 = 0; }
+    #   if ( $x2>=$width ) { $x2 = $width-1; }
+    #   if ( $x1 == $x2 ) { return; }
+    #
+	#   $im->line ( $x1 , $y , $x2 , $y , $col ) ;
+	#   if ( $sam_show_read_arrows ) 
+    #   {
+	#   	if ( $r->[0] & 0x0010 ) 
+    #       { 
+    #           # reverse
+    #           #
+    #           # Make the arrows little smaller and do not scale with size
+	#   		#   my $xn = int ( $x1 + ( $x2 - $x1 ) / 5 ) ;
+	#   		#   $im->line ( $x1 , $y , $xn , $y+2 , $col ) if $xn != $x1 ;
+	#   		$im->line($x1 , $y , $x1+2 , $y+2, $col );
+	#   	} 
+    #       else 
+    #       {
+	#   		#my $xn = int ( $x2 - ( $x2 - $x1 ) / 5 ) ;
+	#   		#$im->line ( $xn , $y-2 , $x2 , $y , $col ) if $xn != $x2 ;
+	#   		$im->line($x2 , $y , $x2-2 , $y-2, $col );
+	#   	}
+	#   }
+	#   
+	#   return unless $draw_snps ;
+	#   return if 0 == sam_check4snps ( $r ) ;
+
 }
 
 
@@ -2857,7 +2880,6 @@ sub sam_paint_single_short_read_allmatch {
 	# print tv_interval ( $time0 ); ;
 	# exit ;
 # }
-
 
 if ( $output eq 'image' ) {
 	if ( $view eq 'indel' ) {
