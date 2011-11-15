@@ -2772,8 +2772,10 @@ sub sam_paint_single_short_read
     if ( $y < 0 ) { return; }
     if ( $y > $height ) { return; }
 
+    # Draw each cigar segment separately
     my $xfrom = $r->[2] - $from;
     my $cigar = $r->[4];
+    my @coords;
     while ($cigar=~/^(\d+)(\D)/)
     {
         my $nbases = $1;
@@ -2796,6 +2798,10 @@ sub sam_paint_single_short_read
         if ( $type eq 'M' ) 
         { 
             $im->line($x1, $y, $x2, $y, $col);
+
+            # Save the coordinates to draw the arrows
+            if ( !@coords or !$cigar ) { push @coords, $x1,$x2; }
+
         }
         elsif ( $type eq 'I' )
         {
@@ -2808,66 +2814,30 @@ sub sam_paint_single_short_read
         }
     }
 
-    # return unless $draw_snps;
-	# while ( $r->[8] =~ m/[a-z]/g ) 
-    # {
-	# 	$x1 = int ( ( $r->[2] - $from + pos ( $r->[8] ) - 1  ) * $width / $ft ) ;
-	# 	$im->line ( $x1 , $y-2 , $x1 , $y+2 , $sam_col_mismatch ) ;
-	# }
+    if ( $sam_show_read_arrows && @coords )
+    {
+        if ( $r->[0] & 0x0010 ) 
+        { 
+            # reverse
+            $im->line($coords[0], $y , $coords[0]+2 , $y+2, $col );
+        } 
+        else 
+        {
+            $im->line($coords[-1], $y , $coords[-1]-2 , $y-2, $col );
+        }
+    }
 
-	#   my $x1 = $r->[2] - $from ;
-	#   my $x2 = $x1 + length $r->[8] ;
-    #
-    #   if ( $y < 0 ) { return; }
-    #   if ( $y > $height ) { return; }
-    #
-    #   if ( $x2 < 0 ) { return; }
-    #   if ( $x1 > $to-$from ) { return; }
-    #
-    #   $x1 = int( $x1*$width/$ft);
-    #   $x2 = int( $x2*$width/$ft);
-    #
-    #   if ( $x1<0 ) { $x1 = 0; }
-    #   if ( $x2>=$width ) { $x2 = $width-1; }
-    #   if ( $x1 == $x2 ) { return; }
-    #
-	#   $im->line ( $x1 , $y , $x2 , $y , $col ) ;
-	#   if ( $sam_show_read_arrows ) 
-    #   {
-	#   	if ( $r->[0] & 0x0010 ) 
-    #       { 
-    #           # reverse
-    #           #
-    #           # Make the arrows little smaller and do not scale with size
-	#   		#   my $xn = int ( $x1 + ( $x2 - $x1 ) / 5 ) ;
-	#   		#   $im->line ( $x1 , $y , $xn , $y+2 , $col ) if $xn != $x1 ;
-	#   		$im->line($x1 , $y , $x1+2 , $y+2, $col );
-	#   	} 
-    #       else 
-    #       {
-	#   		#my $xn = int ( $x2 - ( $x2 - $x1 ) / 5 ) ;
-	#   		#$im->line ( $xn , $y-2 , $x2 , $y , $col ) if $xn != $x2 ;
-	#   		$im->line($x2 , $y , $x2-2 , $y-2, $col );
-	#   	}
-	#   }
-	#   
+    if ( $draw_snps )
+    {
+        # while ( $r->[8] =~ m/[a-z]/g ) 
+        # {
+        #     $x1 = int ( ( $r->[2] - $from + pos ( $r->[8] ) - 1  ) * $width / $ft ) ;
+        #     $im->line ( $x1 , $y-2 , $x1 , $y+2 , $sam_col_mismatch ) ;
+        # }
+    }
 	#   return unless $draw_snps ;
 	#   return if 0 == sam_check4snps ( $r ) ;
-
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
