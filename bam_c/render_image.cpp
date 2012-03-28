@@ -5,6 +5,8 @@
 #include <stdarg.h>
 #include <getopt.h>
 
+//int global_test_flag = 0 ;
+
 #define PNG_DEBUG 3
 #include <png.h>
 
@@ -390,6 +392,7 @@ void Tbam_draw_paired::draw_single_read ( const bam1_t *b, void *data ) {
 void Tbam_draw_paired::draw_paired_read ( const bam1_t *b, void *data) {
 	postype isize = b->core.isize ;
 	unsigned char *bucket = ppaired ;
+	
 
 	// Faceaway
 	bool is_faceaway = false ;
@@ -871,7 +874,8 @@ void Tbam_draw_pileup::paint_single_read ( unsigned char *bucket , const bam1_t 
 		}
 	}
 	
-	if ( y < vstart || y >= vend ) return ;
+//	if ( y < vstart || y >= vend ) return ;
+//	if ( global_test_flag ) cout << "!\n" ;
 	
 	int pile_row , pile_pos ;
 	get_pileup_read_start ( b , pile_row , pile_pos , has_insertion ) ;
@@ -945,7 +949,7 @@ string Tbam_draw_pileup::get_text_rendering () {
 	string ret ;
 	
 	char dummy[100] ;
-	sprintf ( dummy , "%d-%d\n" , start , end ) ;
+	sprintf ( dummy , "%d-%d\n" , (int)start , (int)end ) ;
 	ret += dummy ;
 
 	if ( base->refseq ) {
@@ -1248,7 +1252,20 @@ void Tbam2png::read_bam_file () {
 int Tbam2png::fetch_func(const bam1_t *b, void *data) {  
 	if ( b->core.qual < b2p->mapq ) return 0 ;
 	b2p->total_reads++ ;
+
+
+/*	global_test_flag = 0 ;
+	if ( b->core.flag == 83 ) { // TEST FIXME
+		char s[1000] ;
+		for ( postype a = 0 ; a < b->core.l_qseq ; a++ ) {
+			s[a] = (char) bam2char[bam1_seqi(bam1_seq(b),a)] ;
+		}
+		s[b->core.l_qseq] = 0 ;
+		if ( strstr ( s , "GAATTAAACGATTG" ) ) global_test_flag = 1 ;
+	}*/
+
 	if ( b->core.flag & BAM_FPROPER_PAIR ) {
+
 		//if ( b2p->o_pairs ) 
 		b2p->draw->draw_paired_read ( b , data ) ;
 	} else if ( b->core.flag & BAM_FUNMAP ) {
@@ -1616,11 +1633,11 @@ int main(int argc, char **argv) {
 }
 
 /*
+\rm render_image ; g++ render_image.cpp -O3 -o render_image -lpng -L . -lbam ; time ./render_image --view=pileup --bam=/nfs/disk69/ftp-team112/pf.som/bam/PD0009-01.bam --options=snps,pairs,arrows,single,faceaway,inversions,linkpairs,colordepth --ref=/nfs/team112/refseq/plasmodium/falciparum/3D7_pm.fa --region="MAL1:500605-500805" --png=test.png
+
+
 \rm render_image ; g++ render_image.cpp -O3 -o render_image -lpng -L . -lbam ; time ./render_image --bam=/nfs/users/nfs_m/mm6/ftp/ag/bam/AC0001-C.bam --options=snps,pairs,arrows,single,faceaway,inversions,linkpairs,colordepth --ref=/nfs/users/nfs_m/mm6/ftp/ag/Anopheles_gambiae.clean.fa --region="2L:1-200000" --png=2L.a.png
-
-
 \rm render_image ; g++ render_image.cpp -O3 -o render_image -lpng -L . -lbam ; time ./render_image --bam="ftp://ftp.sanger.ac.uk/pub/team112/ag/bam/AC0001-C.bam" --options=pairs,arrows,single,faceaway,inversions,colordepth,snps --ref=/nfs/users/nfs_m/mm6/ftp/ag/Anopheles_gambiae.clean.fa --region="2L" --png=2L.a.png
-
 \rm render_image ; g++ render_image.cpp -O3 -o render_image -lpng -L . -lbam ; cp render_image ~/wwwdev_data_marker3/..
 
 */
