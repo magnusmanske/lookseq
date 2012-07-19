@@ -14,6 +14,7 @@
 #include "faidx.h"
 
 #include <iostream>
+#include <fstream>
 #include <string>
 #include <vector>
 
@@ -517,6 +518,8 @@ void Tbam_draw_paired::paint_single_read_cigar ( unsigned char *bucket , const b
 			p += ciglen ;
 		} else if ( cigtype == BAM_CPAD ) { // UNTESTED
 			p += ciglen ;
+		} else {
+//			cerr << cigtype << endl ;
 		}
 		
 	}
@@ -936,6 +939,8 @@ void Tbam_draw_pileup::paint_single_read ( unsigned char *bucket , const bam1_t 
 		} else if ( cigtype == BAM_CPAD ) { // UNTESTED
 			pile_pos += ciglen ;
 			p += ciglen ;
+		} else {
+//			cerr << cigtype << endl ;
 		}
 		if ( rp >= b->core.l_qseq ) return ;
 //		if ( cigtype != BAM_CMATCH ) pile[pile_row][pile_pos].c = cigtype ;
@@ -1624,9 +1629,14 @@ int main(int argc, char **argv) {
 	dp->merge_all () ;
 
 	if ( b2p->o_text ) {
-		FILE *fp = fopen(png_file.c_str(), "wb");
-		fprintf ( fp , "%s" , (char*) ( (Tbam_draw_pileup*) dp)->get_text_rendering().c_str() ) ;
-		fclose ( fp ) ;
+		string s = ( (Tbam_draw_pileup*) dp)->get_text_rendering() ;
+		if ( png_file == "-" ) {
+			cout << s ;
+		} else {
+			FILE *fp = fopen(png_file.c_str(), "wb");
+			fprintf ( fp , "%s" , s.c_str() ) ;
+			fclose ( fp ) ;
+		}
 	} else b2p->write_png_file((char*)png_file.c_str());
 
 	return 0;
