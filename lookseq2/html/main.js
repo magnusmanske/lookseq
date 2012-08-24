@@ -1,3 +1,10 @@
+if ( typeof ( console ) == 'undefined' ) {
+	console = {
+		log : function ( msg ) { } // Ignore
+	} ;
+}
+
+
 String.prototype.ucFirst = function()
 {
     return this.charAt(0).toUpperCase() + this.substring(1);
@@ -46,7 +53,7 @@ Track : function () {
 		url += '&sample=' + this.sample ;
 		url += '&width=' + this.width() ;
 		url += '&height=' + this.height() ;
-		url += '&maxdist=' + '500' ;
+		url += '&maxdist=' + $('#select_maxdist').val() ;
 		url += '&view=' + lookseq.mode ;
 		if ( output == 'text' ) url += '&output=text' ;
 		else url += '&output=image' ;
@@ -62,7 +69,7 @@ Track : function () {
 	
 	this.paint = function () {
 		if ( lookseq.initializing ) return ;
-		
+
 		if ( this.type == 'sample' ) this.paint_image();
 		if ( this.type == 'position' ) this.paint_position();
 		if ( this.type == 'annotation' ) this.paint_annotation();
@@ -141,8 +148,8 @@ Track : function () {
 		
 		var chr = lookseq.getChr();
 		var rh = Math.floor ( this.height() / 3 ) - 1 ;
+		if ( typeof lookseq.annotation === "undefined" ) lookseq.annotation = [] ;
 		$.each ( lookseq.annotation , function ( thetype , typedata ) {
-//			console.log ( thetype ) ;
 			var y = 2 ;
 			var col = '#79FC4E' ;
 			if ( thetype == 'gene' ) { y = 0 ; col = '#2F74D0' ; }
@@ -201,7 +208,14 @@ Track : function () {
 		if ( lookseq.mode != 'indel' ) h += " onload='lookseq.recalculateTrackLayout()' " ;
 		h += "/></div>" ;
 		$('#'+this.div).html ( h ) ;
-		$('#'+this.img_id).error ( function () { var src = $(this).attr('src') ; $(this).removeAttr('src') ; $(this).attr('src',src) ; } ) . attr ( 'src' , this.getImageURL() ) ;
+		var reload_counter = 10 ;
+		$('#'+this.img_id).error ( function () {
+			if ( reload_counter <= 0 ) return ;
+			reload_counter-- ;
+			var src = $(this).attr('src') ;
+			$(this).removeAttr('src') ;
+			$(this).attr('src',src) ;
+		} ) . attr ( 'src' , this.getImageURL() ) ;
 		$('#'+this.img_id).dblclick ( function (e) { lookseq.trackimageDblClick(e,this); return false } ) ;
 		$('#'+this.img_id).mousemove ( function (e) { lookseq.trackimageMouseMove(e,this);} ) ;
 		$('#'+this.img_id).draggable ( {
@@ -259,6 +273,8 @@ initializing : false ,
 // INIT
 
 init : function () {
+	$('#select_maxdist').val('500') ;
+	$('#select_maxdist').change(function(){lookseq.updateCurrentURL();lookseq.repaintTracks()}) ;
 	lookseq.scrollbarWidth() ;
 	lookseq.clear() ;
 	lookseq.getSpeciesData() ;
@@ -316,12 +332,22 @@ initializeFromParams : function () {
 	
 	// Options
 	if ( vars['options'] === undefined ) vars['options'] = '' ;
+	
+	$.each ( lookseq.display_options , function ( k , v ) {
+		var id = 'display_' + v ;
+		$('#'+id).attr('checked', false );
+	} ) ;
+	
 	$.each ( vars['options'].split(',') , function ( k , v ) {
 		var opt = v.split('|')[0] ;
 		var val = v.split('|')[1] ;
 		var id = 'display_' + opt ;
 		$('#'+id).attr('checked', val==1?true:false );
 	} ) ;
+	
+	if ( vars['maxdist'] !== undefined ) {
+		$('#select_maxdist').val(vars['maxdist']) ;
+	}
 	
 	// Samples
 	var accid = '' ;
@@ -598,6 +624,7 @@ updatePositions : function ( force ) {
 	lookseq.recalculateTrackLayout() ;
 	
 	$.each ( lookseq.tracks , function ( k , v ) {
+//		console.log ( k ) ;
 		v.paint() ;
 	} ) ;
 	
@@ -735,7 +762,8 @@ getCurrentURL : function () {
 		options.push ( v + '|' + ( $('#display_'+v).is(':checked') ? 1 : 0 ) ) ;
 	} ) ;
 	parts.push ( "options=" + escape(options.join(',')) ) ;
-	
+	parts.push ( "maxdist=" + $('#select_maxdist').val() ) ;
+
 	url += parts.join ( '&' ) ;
 	
 	return url ;
@@ -848,9 +876,11 @@ setMode : function ( mode ) {
 	if ( mode == 'indel' ) {
 		$('#display_pairlinks').removeAttr('disabled') ;
 		$('#display_orientation').removeAttr('disabled') ;
+		$('#select_maxdist').removeAttr('disabled') ;
 	} else {
 		$('#display_pairlinks').attr('disabled','disabled');
 		$('#display_orientation').attr('disabled','disabled');
+		$('#select_maxdist').attr('disabled','disabled');
 	}
 
 	if ( mode == lookseq.mode ) return ;
@@ -976,7 +1006,7 @@ showSamples : function () {
 		$.each ( pd.species , function (k,v) { if ( species != '' ) species += ', ' ; species += k ; } ) ;
 		sb += "<div style='font-size:7pt;text-align:center;border-bottom:1px solid #DDDDDD' id='acc_tab_"+k1+"'><i>" + species + "</i><br/>" + countries + "</div>" ;
 
-		if ( pd.desc != '' ) sb += "<div style='font-size:7pt'>" + pd.desc + "</div>" ;
+		if ( pd.desc != '' && lookseq.logged_in ) sb += "<div style='font-size:7pt'>" + pd.desc + "</div>" ;
 		
 		sb += "<table style='font-size:8pt' cellpadding=1 cellspacing=0><tr><td/>" ;
 		$.each ( lookseq.algorithms , function ( k2 , v2 ) {
@@ -1082,7 +1112,7 @@ showLoginDialog : function () {
 
 showLoginStatus : function () {
 	if ( lookseq.logged_in ) {
-		$('#login_status').html('Wellcome, '+lookseq.username+'!<br/><a href="/">Main page</a> | <a href="#" onclick="lookseq.logout()">Log out</a>');
+		$('#login_status').html('Wellcome, '+lookseq.username+'!<br/><a href="/">Main page</a> | <a href="#" onclick="lookseq.logout();return false">Log out</a>');
 	} else {
 		$('#login_status').html('Not logged in<br/><a href="/">Main page</a> | <a href="#" onclick="lookseq.showLoginDialog()">Log in</a>');
 	}
@@ -1123,6 +1153,7 @@ login : function () {
 logout : function () {
 	$.getJSON ( lookseq.api_url , { action : 'logout' } , function ( data ) {
 		lookseq.clear() ;
+		lookseq.logged_in = false ;
 		lookseq.test_login() ;
 	} ) ;
 	return false ;

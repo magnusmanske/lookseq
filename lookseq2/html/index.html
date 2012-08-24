@@ -4,12 +4,13 @@
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
 <meta name="viewport" content="width=device-width, user-scalable=no" />
 
-<link rel="stylesheet" href="http://ajax.googleapis.com/ajax/libs/jqueryui/1.8.10/themes/base/jquery-ui.css" type="text/css" media="all" /> 
-<link rel="stylesheet" href="/lookseq2/main.css" type="text/css" media="all" /> 
+<!--<link rel="stylesheet" href="https://ajax.googleapis.com/ajax/libs/jqueryui/1.8.10/themes/base/jquery-ui.css" type="text/css" media="all" /> -->
+<link rel="stylesheet" href="../jquery-ui-1.8.20.custom/css/ui-lightness/jquery-ui-1.8.20.custom.css" type="text/css" media="all" /> 
+<link rel="stylesheet" href="./main.css" type="text/css" media="all" /> 
 
-<script type="text/javascript" src="http://code.jquery.com/jquery-latest.pack.js"></script>
+<script type="text/javascript" src="../jquery-ui-1.8.20.custom/js/jquery-1.7.2.min.js"></script>
 <!--<script src="http://cdn.jquerytools.org/1.2.5/jquery.tools.min.js"></script>-->
-<script src="http://ajax.googleapis.com/ajax/libs/jqueryui/1.8.10/jquery-ui.min.js" type="text/javascript"></script>
+<script src="../jquery-ui-1.8.20.custom/js/jquery-ui-1.8.20.custom.min.js" type="text/javascript"></script>
 
 <script src="./main.js" type="text/javascript"></script>
 <script src="./config.js" type="text/javascript"></script>
@@ -90,7 +91,18 @@
 			<input type="checkbox" id='display_orientation' onClick='lookseq.repaintTracks()' /><label for="display_orientation">orientation</label><br/> 
 			<input type="checkbox" id='display_faceaway' onClick='lookseq.repaintTracks()' /><label for="display_faceaway">face-away</label><br/>
 			<input type="checkbox" id='display_basequal' onClick='lookseq.repaintTracks()' /><label for="display_basequal">base&nbsp;quality</label><br/> 
-			<br/><a href='#' id='current_url'>Link to this view</a>
+			<br/>
+			<select id='select_maxdist' title='Largest read pair mapping distance (default view only)'>
+				<option value='300'>300 bp</option>
+				<option value='500'>500 bp</option>
+				<option value='1000'>1000 bp</option>
+				<option value='2000'>2000 bp</option>
+				<option value='5000'>5000 bp</option>
+				<option value='10000'>10000 bp</option>
+				<option value='20000'>20000 bp</option>
+				<option value='50000'>50000 bp</option>
+			</select>
+			<br/>
 <!--		</td><td valign='top' style='' nowrap> 
 			<input type='checkbox' id='display_potsnps' onclick="lookseq.repaintTracks()" checked="checked"/><label for="display_potsnps">known SNPs</label><br/>
 			<input type='checkbox' id='display_uniqueness' onclick="lookseq.repaintTracks()" checked="checked"/><label for="display_uniqueness">non-uniqueness</label> -->
@@ -102,6 +114,8 @@
 		<a href='http://www.sanger.ac.uk/resources/software/lookseq/'>About LookSeq</a><br/>
 		<a href='http://genome.cshlp.org/content/19/11/2125.long'>Publication</a><br/>
 <!--		<a href=''>Help</a><br/>--><i>Help</i><br/>
+
+		<br/><br/><a href='#' id='current_url'>Link to this view</a>
 <!--<hr/>
 		<a href='http://www.sanger.ac.uk/MapSeq/'>MapSeq</a><br/>
 		<a href='http://lookseq1.internal.sanger.ac.uk/cgi-bin/allmysamples/index.pl'>Sequencing pipeline</a><br/>-->
@@ -126,13 +140,13 @@
 <!-- DIALOGS ETC. -->
 <div id='login_dialog' title='Log in' style='display:none'>
 	<div id='login_warning' style='display:none;color:red;text-align:center'></div>
-	<div>Please log in using your <a href='http://www.sanger.ac.uk/MapSeq/'>MapSeq</a> credentials:</div>
+	<div>Please log in using your <a id='loginlink' href='//lookseq.sanger.ac.uk/cgi-bin/pipeline_status/access.pl'>MalariaGEN</a> credentials:</div>
 	<table>
 	<tr><th>E-mail</th><td><input id='email' type='text' size='50' /></td></tr>
 	<tr><th>Password</th><td><input id='password' type='password' size='50' /></td></tr>
 	<tr><th></th><td><input id='login' type='submit' value='Log in' onclick='lookseq.login()' /></td></tr>
 	</table>
-	<small>No account? Password problems? <a href='mailto:jg10@sanger.ac.uk?subject=MapSeq/LookSeq account'>Ask for help</a>!</small>
+	<small>You can create an account or recover your password <a href='//lookseq.sanger.ac.uk/cgi-bin/pipeline_status/access.pl'>here</a>!</small>
 </div>
 
 <div id='search_dialog' title='Search results' style='display:none'>
