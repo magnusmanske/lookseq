@@ -36,7 +36,7 @@ using namespace std ;
 #define PC_INSERTION 8
 #define PC_DELETION 16
 
-typedef long postype ;
+typedef int64_t postype ;
 
 typedef struct {  
 	int beg, end;  
