@@ -1,3 +1,4 @@
+#include <math.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -47,6 +48,7 @@ typedef vector <postype> TVI ;
 
 vector <TVI> lcd_chars ;
 char bam2char[255] ;
+char to_upper_case[255] ;
 
 class Tbam2png ;
 
@@ -122,7 +124,13 @@ class Tbam_draw_coverage : public Tbam_draw_paired {
 	virtual void draw_axis () ;
 	virtual void hline ( unsigned char *bucket , postype from , postype to , postype y , bool count_in_coverage = true ) ;
 	
+	bool new_coverage_mode ;
 	int *cov ;
+
+	vector <float> mean ;
+	vector <float> stdev ;
+	void compute_mean_stdev () ;
+
 } ;
 
 class Tbam_draw_pileup : public Tbam_draw_paired {
@@ -464,7 +472,7 @@ void Tbam_draw_paired::paint_single_read ( unsigned char *bucket , const bam1_t 
 			if ( p < start ) continue ;
 			if ( p >= end ) break ;
 
-			if ( *(base->refseq+p-start) != bam2char[bam1_seqi(s,a)] ) {
+			if ( to_upper_case[*(base->refseq+p-start)] != bam2char[bam1_seqi(s,a)] ) {
 				hline ( psnps , p , p , y , false ) ;
 			}
 		}
@@ -487,8 +495,9 @@ void Tbam_draw_paired::paint_single_read_cigar ( unsigned char *bucket , const b
 		uint32_t cigtype = cigdata[cigcnt] & 15 ;
 		
 		if ( cigtype == BAM_CMATCH ) { // OK
-			for ( int b = 0 ; b < ciglen ; b++ , p++ , rp++ ) {
-				if ( *(base->refseq+p-start+1) != bam2char[bam1_seqi(s,rp)] ) {
+			for ( postype b = 0 ; b < ciglen ; b++ , p++ , rp++ ) {
+				if ( p+1 < start ) continue ;
+				if ( to_upper_case[*(base->refseq+p-start+1)] != bam2char[bam1_seqi(s,rp)] ) {
 					hline ( psnps , p , p , y ) ;
 				} else {
 					hline ( bucket , p , p , y ) ;
@@ -707,6 +716,7 @@ void Tbam_draw_paired::merge_all () {
 // Tbam_draw_coverage
 
 Tbam_draw_coverage::Tbam_draw_coverage ( Tbam2png *_base ) : Tbam_draw_paired ( _base ) {
+	new_coverage_mode = false ;
 //	left = right = top = bottom = 0 ;
 }
 
@@ -728,6 +738,16 @@ int Tbam_draw_coverage::get_neccessary_height () {
 
 	int i ;
 	int width = base->get_width() ;
+
+	if ( new_coverage_mode ) {
+		compute_mean_stdev() ;
+		int ret = 0 ;
+		for ( i = 0 ; i < mean.size() ; i++ ) {
+			if ( ret < mean[i]+stdev[i] ) ret = mean[i]+stdev[i] ;
+		}
+		return ret+1 ;
+	}
+
 	int upper = size > width ? width : size ;
 	int *p1 = new int[upper] ;
 	int *p2 = new int[upper] ;
@@ -763,12 +783,45 @@ void Tbam_draw_coverage::draw_axis () {
 	}
 }
 
+void Tbam_draw_coverage::compute_mean_stdev () {
+	int i ;
+	int width = base->get_width() ;
+	vector <TVI> p ;
+	while ( p.size() < width ) p.push_back ( TVI() ) ;
+	
+	for ( i = 0 ; i < size ; i++ ) {
+		int x = width * i / size ;
+		p[x].push_back ( cov[i] ) ;
+	}
+	
+	mean = vector <float> ( width , 0 ) ;
+	stdev = vector <float> ( width , 0 ) ;
+	
+	for ( i = 0 ; i < width ; i++ ) {
+		if ( p[i].size() == 0 ) {
+			if ( width > size && i > 0 ) { // Zoomed-in "smoothing"
+				mean[i] = mean[i-1] ;
+				stdev[i] = stdev[i-1] ;
+			}
+			continue ;
+		}
+		for ( int j = 0 ; j < p[i].size() ; j++ ) mean[i] += p[i][j] ;
+		mean[i] /= (float) p[i].size() ;
+		
+		for ( int j = 0 ; j < p[i].size() ; j++ ) stdev[i] += (mean[i]-p[i][j])*(mean[i]-p[i][j]) ;
+		stdev[i] /= (float) p[i].size() ;
+		stdev[i] = sqrt ( stdev[i] ) ;
+	}
+}
+
 void Tbam_draw_coverage::merge_all () {
 	// Clear canvas
+	int width = base->get_width() ;
+	int height = base->get_height() ;
 	png_bytep * row_pointers = base->get_row_pointers () ;
-	for ( int y = 0 ; y < base->get_height() ; y++) {
+	for ( int y = 0 ; y < height ; y++) {
 		png_byte* row = row_pointers[y];
-		for ( int x = 0 ; x < base->get_width() ; x++) {
+		for ( int x = 0 ; x < width ; x++) {
 			png_byte* ptr = &(row[x*4]);
 			ptr[0] = 255 ;
 			ptr[1] = 255 ;
@@ -777,13 +830,46 @@ void Tbam_draw_coverage::merge_all () {
 		}
 	}
 
-	int width = base->get_width() ;
-	int height = base->get_height() ;
 	int i ;
+	
+	if ( new_coverage_mode ) {
+		if ( mean.size() == 0 ) compute_mean_stdev() ;
+
+		// Paint
+		for ( i = 0 ; i < width ; i++ ) {
+
+			for ( int j = mean[i]-stdev[i] ; j <= mean[i]+stdev[i] ; j++ ) {
+				if ( j < 0 ) continue ;
+				int y = height - j - 1 ;
+				png_byte* row = row_pointers[y];
+				png_byte* ptr = &(row[i*4]);
+				ptr[0] = 0x99 ;
+				ptr[1] = 0xC7 ;
+				ptr[2] = 255 ;
+				ptr[3] = 255 ;
+			}
+
+			{
+				int y = height - mean[i] - 1 ;
+				png_byte* row = row_pointers[y];
+				png_byte* ptr = &(row[i*4]);
+				ptr[0] = 0 ;
+				ptr[1] = 0 ;
+				ptr[2] = 255 ;
+				ptr[3] = 255 ;
+			}
+
+		}
+		
+		draw_axis () ;
+		
+		return ;
+	}
+	
 	int *p1 = new int[width] ;
 	int *p2 = new int[width] ;
 	for ( i = 0 ; i < width ; i++ ) p1[i] = p2[i] = 0 ;
-	
+
 	if ( size >= width ) {
 		for ( i = 0 ; i < size ; i++ ) {
 			int x = width * i / size ;
@@ -830,6 +916,7 @@ void Tbam_draw_pileup::set_range () {
 
 int Tbam_draw_pileup::get_neccessary_height () {
 	render_as_text = base->get_width() >= NUMBER_WIDTH * size ;
+	if ( size <= 220 ) render_as_text = true ;
 	if ( render_as_text ) return (pile.size()+2)*10 + 2 ;
 	return (pile.size()+2) ;
 }
@@ -898,7 +985,7 @@ void Tbam_draw_pileup::paint_single_read ( unsigned char *bucket , const bam1_t 
 				if ( p >= end ) return ;
 
 				char base_read = bam2char[bam1_seqi(s,a+rp)] ;
-				char base_ref = base->refseq ? *(base->refseq+p-start) : base_read ;
+				char base_ref = base->refseq ? to_upper_case[*(base->refseq+p-start)] : base_read ;
 				pile[pile_row][pile_pos].c = base_read ;
 				pile[pile_row][pile_pos].quality = *q ;
 				if ( base_read == base_ref ) {
@@ -959,7 +1046,7 @@ string Tbam_draw_pileup::get_text_rendering () {
 
 	if ( base->refseq ) {
 		for ( int col = 0 ; col < size ; col++ ) {
-			char c = *(base->refseq+col) ;
+			char c = to_upper_case[*(base->refseq+col)] ;
 			ret += c ;
 		}
 		ret += "\n\n" ;
@@ -1040,7 +1127,7 @@ void Tbam_draw_pileup::merge_all () {
 		if ( base->refseq ) {
 			int y = height - 10 ;
 			for ( int col = 0 ; col < size ; col++ ) {
-				char c = *(base->refseq+col) ;
+				char c = to_upper_case[*(base->refseq+col)] ;
 				int x = col * width / size ;
 				render_char ( c , x , y ) ;
 			}
@@ -1548,6 +1635,13 @@ int main(int argc, char **argv) {
 	bam2char[4] = 'G' ;
 	bam2char[8] = 'T' ;
 	bam2char[15] = 'N' ;
+	
+	for ( int a = 0 ; a < 256 ; a++ ) to_upper_case[a] = a ;
+	to_upper_case['a'] = 'A' ;
+	to_upper_case['c'] = 'C' ;
+	to_upper_case['g'] = 'G' ;
+	to_upper_case['t'] = 'T' ;
+	to_upper_case['n'] = 'N' ;
 
 	string view = "indel" ;
 	string bam_file , ref_file , png_file , region , options ;
@@ -1615,7 +1709,7 @@ int main(int argc, char **argv) {
 
 	
 	b2p->read_bam_file () ;
-	
+
 	if ( view == "coverage" ) {
 		height = dp->get_neccessary_height () ;
 		b2p->set_image_size ( width , height ) ;
@@ -1623,7 +1717,6 @@ int main(int argc, char **argv) {
 		height = dp->get_neccessary_height () ;
 		b2p->set_image_size ( width , height ) ;
 	}
-
 
 	b2p->create_png () ;
 	dp->merge_all () ;
@@ -1643,9 +1736,9 @@ int main(int argc, char **argv) {
 }
 
 /*
+\rm render_image ; icpc render_image.cpp -O3 -o render_image -lpng -L . -lbam ; ./render_image --bam="/nfs/disk69/ftp-team112/pv.bwa/bam/PJ0006-CW.bam" --ref=/nfs/team112/refseq/plasmodium/vivax/PvivaxGenomic_PlasmoDB-6.0.shortnames.fasta --region="gb_CM000455:2897150-2900884" --png=test2.png --width=1690 --height=512 --view=coverage --vmax=5000 --options=pairs,snps,linkpairs,noscale,arrows,colordepth
+
 \rm render_image ; g++ render_image.cpp -O3 -o render_image -lpng -L . -lbam ; time ./render_image --view=pileup --bam=/nfs/disk69/ftp-team112/pf.som/bam/PD0009-01.bam --options=snps,pairs,arrows,single,faceaway,inversions,linkpairs,colordepth --ref=/nfs/team112/refseq/plasmodium/falciparum/3D7_pm.fa --region="MAL1:500605-500805" --png=test.png
-
-
 \rm render_image ; g++ render_image.cpp -O3 -o render_image -lpng -L . -lbam ; time ./render_image --bam=/nfs/users/nfs_m/mm6/ftp/ag/bam/AC0001-C.bam --options=snps,pairs,arrows,single,faceaway,inversions,linkpairs,colordepth --ref=/nfs/users/nfs_m/mm6/ftp/ag/Anopheles_gambiae.clean.fa --region="2L:1-200000" --png=2L.a.png
 \rm render_image ; g++ render_image.cpp -O3 -o render_image -lpng -L . -lbam ; time ./render_image --bam="ftp://ftp.sanger.ac.uk/pub/team112/ag/bam/AC0001-C.bam" --options=pairs,arrows,single,faceaway,inversions,colordepth,snps --ref=/nfs/users/nfs_m/mm6/ftp/ag/Anopheles_gambiae.clean.fa --region="2L" --png=2L.a.png
 \rm render_image ; g++ render_image.cpp -O3 -o render_image -lpng -L . -lbam ; cp render_image ~/wwwdev_data_marker3/..
